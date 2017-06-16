@@ -134,9 +134,16 @@ function ERROR(project, error) {
  */
 function processProject(project, callback) {
     LOG(project, "started processing project " + project.name);
-    project.projectDir = module.exports.outDir + "/projects" + getSubdirForId(project.index, "projects");
+    project.outDir = module.exports.outDir + "/projects" + getSubdirForId(project.index, "projects");
     async.waterfall([
-        (callback) => { callback(null, project) },
+        (callback) => { 
+            child_process.exec("mkdir -p " + project.outDir, (error, cout, cerr) => {
+                if (error)
+                    callback(error, project);
+                else
+                    callback(null, project);
+            });
+        },
         downloadProject,
         getCommits,
         analyzeCommits,
@@ -465,42 +472,30 @@ function loadMetadata(project, callback) {
         callback(null, project);
     } else {
         let token = module.exports.apiTokens[apiTokenIndex_++];
+        let apiUrl = "https://api.github.com/repos/" + project.name;
         if (apiTokenIndex_ == module.exports.apiTokens.length)
             apiTokenIndex_ = 0;
-        child_process.exec("curl -D metadata.headers -s " << project.apiUrl << "-H \"Authorization: token " + token + "\" -o metadata.json", {
-            cwd: proj
-        }
-        )
-
-
-
+        child_process.exec("curl -D metadata.headers -s " + apiUrl + " -H \"Authorization: token " + token + "\" -o metadata.json", {
+            cwd: project.outDir
+        }, (error, cout, cerr) => {
+            if (error)
+                ERROR(project, "Unable to download metadata from url " + apiUrl);
+            callback(null, project);
+        }); 
     }
-//     std::string req = STR("curl -D metadata.headers -s " << apiUrl() << " -H \"Authorization: token " << token << "\" -o metadata.json");
-
-
-    callback(null, project);
-
 }
 
 function storeProjectInfo(project, callback) {
     LOG(project, "Storing projct information");
-    let projectFile = module.exports.outDir + "/projects" + getSubdirForId(project.index, "projects") + "/" + project.index;
-    child_process.exec("mkdir -p " + projectFile, (error, cout, cerr) => {
+    let projectFile = project.outDir + "/project.json";
+    fs.writeFile(projectFile, JSON.stringify(project), (error) => {
         if (error) {
-            ERROR(project, "Unable to create project dir " + projectFile);
+            ERROR(project, "Unable to store project.json, error:" + error);
             callback(error, project);
         } else {
-            fs.writeFile(projectFile + "/project.json", JSON.stringify(project), (error) => {
-                if (error) {
-                    ERROR(project, "Unable to store project.json, error:" + error);
-                    callback(error, project);
-                } else {
-                    callback(null, project);
-                }
-            })
+            callback(null, project);
         }
     });
-
 }
 
 
@@ -531,130 +526,3 @@ function closeProject(project, callback) {
 
 
 
-
-
-let n = 0
-
-
-
-
-
-
-
-
-
-/** Downloads the project from github 
-function downloadProject(project, callback) {
-    project.url =  "https://github.com/" + project.name;
-    project.path = module.exports.tmpDir + "/" + project.index
-    child_process.exec("git clone " + project.url + " " + project.path, 
-        (error, cout, cerr) => {
-            if (error) {
-                console.error("Unable to download project " + project.url + ", error: " + error);        
-                closeProject(project, callback);
-            } else {
-                console.log("PROJECT " + project.index + " downloaded");
-                analyzeProject(project, callback);
-            }
-        }
-    );
-}
-
-function analyzeProject(project, callback) {
-
-}
-
-
-
-
-
-function analyzeProjectX(project, callback) {
-    // get all files available in the repository
-    child_process.exec("git ls-tree --full-tree -r HEAD", {
-        cwd : project.path,
-    }, (error, cout, cerr) => {
-        // split line by line
-        project.totalFiles = 0
-        project.blacklistedFiles = 0;
-        project.downloadedFiles = 0;
-        let files = []
-        for (let line of cout.split("\n")) {
-            let filename = line.split("\t")[1];
-            if (filename === undefined)
-                continue;
-            ++project.totalFiles;
-            let allow = isValidFilename(filename);
-            if (allow === undefined) {
-                ++project.blacklistedFiles;
-            } else if (allow) {
-                ++project.downloadedFiles;
-                files.push(filename);
-            }
-        }
-        console.log("PROJECT " + project.index);
-        console.log("  Total Files :" + project.totalFiles);
-        console.log("  Blacklisted :" + project.blacklistedFiles);
-        console.log("  Downloaded  :" + project.downloadedFiles);
-        // get list of all commits 
-
-
-
-
-
-        closeProject(project, callback);
-    });
-}
-
-
-/** Analyzes the given commit 
-function analyzeCommit(task, callback) {
-    // extract project & commit from the task
-    project = task.project;
-    commit = task.commit;
-    child_process.exec("git ls-tree " + commit, {
-        cwd: project.path,
-    }, (error, cout, cerr) => {
-        for (let f of cout.split("\n")) {
-
-        }
-    });
-}
-
-
-
-
-
-
-function closeProject(project, callback) {
-    child_process.exec("rm -rf " + project.path, () => {
-        if (project.index < 10)
-            callback();
-    });
-}
-
-/*
-function upload_file(file, callback) {
-    // Do funky stuff with file
-    callback();
-}
-
-var queue = async.queue(upload_file, 10); // Run ten simultaneous uploads
-
-queue.drain = function() {
-    console.log("All files are uploaded");
-};
-
-// Queue your files for upload
-queue.push(files);
-
-queue.concurrency = 20; // Increase to twenty simultaneous uploads
-/**
-var lineReader = require('readline').createInterface({
-  input: require('fs').createReadStream('file.in')
-});
-
-lineReader.on('line', function (line) {
-  console.log('Line from file:', line);
-});
-
-*/

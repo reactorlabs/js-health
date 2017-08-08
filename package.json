@@ -1,16 +1,11 @@
 {
-  "name": "js-health",
+  "name": "googlejs",
   "version": "1.0.0",
-  "description": "Tools & stuff for the analysis of JavaScript ecosystem health, packages and everything.",
+  "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "peta",
-  "license": "ISC",
-  "devDependencies": {
-    "acorn": "^5.0.3",
-    "async": "^2.4.1",
-    "nodegit": "^0.18.3"
-  }
+  "author": "",
+  "license": "ISC"
 }

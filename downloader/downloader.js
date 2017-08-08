@@ -8,45 +8,6 @@ const async = require("async");
 let contentHashes = {}
 let contentHashId = 1
 
-
-
-/** We need to distinguish between */
-function historyHashToId(hash) {
-    let result = contentHashes[hash];
-    if (result === undefined) {
-        contentHashes[hash] = -contentHashId;
-        return contentHashId++;
-    } else if (result < 0) {
-        return -result;
-    } else {
-        return result;
-    }
-}
-
-/** ??? */
-function snapshotHashToId(hash) {
-    let result = contentHashes[hash];
-    if (result < 0)
-        contentHashes[hash] = -result;
-    return result;
-}
-
-/** Returns a path for the given snapshot id using the hierarchical scheme */
-function getSubdirForId(id, prefix) {
-    if (module.exports.maxFiles === 0)
-        return "";
-    let result = "";
-    let min = 1;
-    let max = module.exports.maxFiles;
-    let dirId = Math.floor(id / module.exports.maxFiles);
-    while (dirId !== 0) {
-        result = result + "/" + prefix + "-" + (dirId % module.exports.maxFiles);
-        dirId = Math.floor(dirId / module.exports.maxFiles);
-    } 
-    return result;
-}
-
-
 module.exports = {
 
     /** Temprary directory where projects are to be downloaded */
@@ -85,10 +46,8 @@ module.exports = {
         "e0fb6a7a249566d695f3cc9ab7c148864497775d",
         "8a6eceeb42faeb861a451df1e01b031b4e5a593a"
     ],
-    
 
-
-    /** Downloads the github projects from the
+    /** Loads all project urls from the input file into the queue. 
       */
     downloadProjects: function(filename) {
         child_process.execSync("mkdir -p " + module.exports.outDir + "/files");
@@ -121,6 +80,43 @@ module.exports = {
     }
 }
 
+
+/** We need to distinguish between */
+function historyHashToId(hash) {
+    let result = contentHashes[hash];
+    if (result === undefined) {
+        contentHashes[hash] = -contentHashId;
+        return contentHashId++;
+    } else if (result < 0) {
+        return -result;
+    } else {
+        return result;
+    }
+}
+
+/** ??? */
+function snapshotHashToId(hash) {
+    let result = contentHashes[hash];
+    if (result < 0)
+        contentHashes[hash] = -result;
+    return result;
+}
+
+/** Returns a path for the given snapshot id using the hierarchical scheme */
+function getSubdirForId(id, prefix) {
+    if (module.exports.maxFiles === 0)
+        return "";
+    let result = "";
+    let min = 1;
+    let max = module.exports.maxFiles;
+    let dirId = Math.floor(id / module.exports.maxFiles);
+    while (dirId !== 0) {
+        result = result + "/" + prefix + "-" + (dirId % module.exports.maxFiles);
+        dirId = Math.floor(dirId / module.exports.maxFiles);
+    } 
+    return result;
+}
+
 function LOG(project, message) {
     console.log(project.index + ": " + message);
 }
@@ -129,6 +125,8 @@ function ERROR(project, error) {
     project.error = error
     console.log(project.index+" ERROR: " + error);
 }
+
+
 
 /** Processes the given project.
  */

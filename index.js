@@ -38,7 +38,7 @@ apiTokens = [
 /* Downloads top starred projects of given language.
 */
 function downloadStars(language, output, numProjects) {
-    console.log("Dowbloading top " + numProjects + " projects...");
+    console.log("Downloading top " + numProjects + " projects...");
     console.log("  language:     " + language);
     console.log("  output dir:   " + output);
     let stars = undefined;

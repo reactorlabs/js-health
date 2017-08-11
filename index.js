@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const readline = require('readline');
 const async = require("async");
+const download_stars = require("./stuff/download_stars.js");
 
 apiTokens = [
     "36df491663476ff4a13d53188253d43b5ef6d3c9",
@@ -35,51 +36,8 @@ apiTokens = [
 ];
 
 
-/* Downloads top starred projects of given language.
-*/
-function downloadStars(language, output, numProjects) {
-    console.log("Downloading top " + numProjects + " projects...");
-    console.log("  language:     " + language);
-    console.log("  output dir:   " + output);
-    let stars = undefined;
-    let projects = {};
-    let tidx = 0;
-    let page = 11
-    let url = ""
-    let pid = 0;
-    while (pid < numProjects) {
-        if (page === 11) {
-            url = "https://api.github.com/search/repositories?q=language:" + language;
-            if (stars !== undefined) 
-                url = url + "+stars:<=" + stars;
-            url = url + "&sort=stars&order=desc&per_page=100";
-            page = 1;
-        }
-        let cmd = "curl -s -H \"Authorization: token " + apiTokens[tidx] + "\" \"" + url + "&page=" + page + "\"";
-        //console.log(cmd);
-        let response = child_process.execSync(cmd)
-        let json = JSON.parse(response);
-        for (let project of json.items) {
-            if (projects[project.url] === undefined) {
-                projects[project.url] = true;
-                stars = project.stargazers_count;
-                console.log(project.url);
-                child_process.execSync("git clone " + project.clone_url + " " + output + "/" + pid)
-                fs.writeFileSync(output + "/" + pid + ".json", JSON.stringify(project));
-                ++pid;
-            }
-        }
-        page = page + 1
-    }
-    console.log("KTHXBYE");
-}
-
-let projects = new Array();
 
 
-function fileExists(path) {
-    return fs.existsSync(path) && fs.statSync(path).isFile();
-}
 
 /** Once the projects are downloaded, analyze if & how their code can be executed. */
 function analyzeProject(output, id) {
@@ -221,6 +179,42 @@ function runTests(output, id) {
 }
 
 
+function help() {
+    console.log("USAGE: node index.js ACTION ...")
+    console.log("")
+    console.log("Where ACTION is one of the following and ... is the extra arguments for the")
+    console.log("selected action. NOTE that all paths must be absolute.")
+    download_stars.help();
+
+    // Add your own actions here
+    console.log("")
+    console.log("Example: node.js topStars /home/projects 10 JavaScripts")
+    console.log("    (downloads top 10 JavaScript projects in /home/projects")
+}
+
+
+
+console.log("OH HAI CAN I HAZ NODE?")
+
+if (process.argv.length <= 2) {
+    console.log("Invalid usage, specify the action");
+    process.exit(-1);
+}
+
+let action = process.argv[2];
+if (action === "topStars") {
+    download_stars.download(apiTokens);
+} else if (action === "help") {
+    help();
+} else {
+    console.log("Invalid action name " + action);
+    process.exit(-1);
+}
+
+console.log("KTHXBYE");
+process.exit();
+
+/*
 
 output = "/data/googlejs/topStars"
 for (let i = 0; i < 1000; ++i)
@@ -249,7 +243,7 @@ for (let i = 0; i < 1000; ++i) {
 
 console.log("Successfull tests:  " + success);
 
-process.exit();
+process.exit(); */
 
 
 

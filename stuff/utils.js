@@ -20,6 +20,17 @@ module.exports = {
 
     rm: function(path, extraArgs = "") {
         child_process.execSync("rm " + path + " " + extraArgs);
+    },
+
+    listProjects: function(path, num) {
+        let result = new Array();
+        for (let i = 0; i < num; ++i) {
+            if (module.exports.isFile(path + "/" + i + ".json"))
+                result.push({ path: path + "/" + i });
+        }
+        if (result.length !== num)
+            console.log("Warning: Only " + result.length + " projects found...");
+        return result;
     }
 
 }

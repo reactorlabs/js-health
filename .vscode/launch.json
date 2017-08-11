@@ -9,7 +9,8 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Program",
-            "program": "${workspaceRoot}/index.js"
+            "program": "${workspaceRoot}/index.js",
+            "args": [ "testable", "/data/googlejs/topStars", "1000"]
         }
     ]
 }

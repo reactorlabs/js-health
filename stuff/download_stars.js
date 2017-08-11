@@ -9,16 +9,17 @@ module.exports = {
     help: function() {
         console.log("")
         console.log("topStars OUTPUT NUM LANG")
-        console.log("   Downloads top NUM projects ordered by number of stars from github,")
-        console.log("   using the given LANGUAGE into the OUTPUT directory. The directory")
-        console.log("   is created if it does not exist. The projects are stored in")
-        console.log("   subfolders corresponding to the project rank. Github metadata are")
-        console.log("   are stored in the OUTPUT folder for each project, the name of the")
-        console.log("   corresponds to project's subfolder.")
+        console.log("    Downloads top NUM projects ordered by number of stars from github,")
+        console.log("    using the given LANGUAGE into the OUTPUT directory. The directory")
+        console.log("    is created if it does not exist. The projects are stored in")
+        console.log("    subfolders corresponding to the project rank. Github metadata are")
+        console.log("    are stored in the OUTPUT folder for each project, the name of the")
+        console.log("    corresponds to project's subfolder.")
     },
 
     download: function(apiTokens) {
         if (process.argv.length !== 6) {
+            module.exports.help();
             console.log("Invalid number of arguments for topStars action");
             process.exit(-1);
         }

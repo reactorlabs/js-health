@@ -4,6 +4,7 @@ const fs = require("fs");
 const readline = require('readline');
 const async = require("async");
 const download_stars = require("./stuff/download_stars.js");
+const test_runner = require("./stuff/test_runner.js");
 
 apiTokens = [
     "36df491663476ff4a13d53188253d43b5ef6d3c9",
@@ -35,156 +36,13 @@ apiTokens = [
     "8a6eceeb42faeb861a451df1e01b031b4e5a593a"
 ];
 
-
-
-
-
-/** Once the projects are downloaded, analyze if & how their code can be executed. */
-function analyzeProject(output, id) {
-    //let project = JSON.parse(fs.readFileSync(output + "/" + id + ".json"))
-    //console.log(project.url);
-    let path = output + "/" + id + "/";
-    // get quick usage statictics 
-    let p = {};
-    projects.push(p);
-    p.usesNPM = fileExists(path + "package.json");
-    p.usesBower = fileExists(path + "bower.json");
-    p.usesGrunt = fileExists(path + "Gruntfile.js");
-    p.usesGulp = fileExists(path + "gulpfile.js"); 
-    p.usesAppveyor = fileExists(path + "appveyor.yml");
-    p.usesTravis = fileExists(path + ".travis.yml");
-    p.usesKarma = fileExists(path + "karma.conf.js");
-    p.usesKarma = p.usesKarma || fileExists(path + ".config/karma.conf.js");
-    if (p.usesNPM) {
-        try {
-            let x = fs.readFileSync(path + "package.json", {encoding : "utf8"})
-            let pjson = JSON.parse(x);
-            // see if the package specifies a way to run tests
-            if (pjson.scripts !== undefined) {
-                if (pjson.scripts.test !== undefined)
-                    p.npmTest = true;
-//                else if (pjson.scripts.tests !== undefined)
-//                    p.npmTest = true;
-            }
-        } catch (e) {
-            p.badPackageJson = true;    
-        }
-    }
-    // try analyzing the gruntfile
-    if (p.usesGrunt) {
-        let x = fs.readFileSync(path + "Gruntfile.js", {encoding : "utf8"})
-        if (x.indexOf("grunt.registerTask('test'") !== -1)
-            p.gruntTest = true;
-        else if (x.indexOf("grunt.registerTask(\"test\"") !== -1)
-            p.gruntTest = true;
-    }
-    // try analyzing the gulpfile
-    if (p.usesGulp) {
-        let x = fs.readFileSync(path + "gulpfile.js", {encoding : "utf8"})
-        if (x.indexOf("gulp.task('test'") !== -1)
-            p.gulpTest = true;
-        else if (x.indexOf("gulp.task(\"test\"") !== -1)
-            p.gulpTest = true;
-    }
-    // store the updated project JSON
-    //fs.writeFileSync(output + "/" + pid + ".json", JSON.stringify(project));
-}
-
-
-
-function dncCompare(x, y) {
-    if (x === undefined)
-        return true;
-    return (y !== undefined) && (x === y);
-}
-
-// npm, bower, grunt, gulp, appveyor, travis, karma
-function sumProjects(options) {
-    let result = 0;
-    for (p of projects)
-        if (dncCompare(options.npm, p.usesNPM) &&
-            dncCompare(options.bower, p.usesBower) &&
-            dncCompare(options.grunt, p.usesGrunt) &&
-            dncCompare(options.gulp, p.usesGulp) &&
-            dncCompare(options.appveyor, p.usesAppveyor) &&
-            dncCompare(options.travis, p.usesTravis) &&
-            dncCompare(options.karma, p.usesKarma) &&
-            dncCompare(options.badPackageJson, p.badPackageJson) &&
-            dncCompare(options.gruntTest, p.gruntTest) &&
-            dncCompare(options.gulpTest, p.gulpTest) &&
-            dncCompare(options.npmTest, p.npmTest))
-            ++result;
-    return result;
-}
-
-// npm, bower, grunt, gulp, appveyor, travis, karma
-function sumTestable() {
-    let result = 0;
-    for (p of projects)
-        if (p.npmTest || p.gruntTest || p.gulpTest)
-            ++result;
-    return result;
-}
-
-function analyzeNPM(output, id) {
-    console.log("  analyzing package.json...")
-    let pjson = JSON.parse(fs.readFileSync(output + "/" + id + "/package.json"));
-    // see if the package specifies a way to run tests
-    if (pjson.scripts.test !== undefined)
-        return "npm test";
-    if (pjson.scripts.tests !== undefined)
-        return "npm tests";
-    return undefined;
-} 
-
-function runTests(output, id) {
-    let p = projects[id];
-    if (p.npmTest || p.gulpTest || p.gruntTest) {
-        console.log("Running tests for project " + id);
-        if (!p.usesNPM) {
-            console.log("  !!! not a NPM project")
-        } else {
-            console.log("  running npm install...")
-            child_process.execSync("npm install", { cwd : output + "/" + id, timeout: 600000});
-        }
-        if (p.npmTest) {
-            console.log("  npm test")
-            try {
-                child_process.execSync("npm test", { cwd: output + "/" + id, timeout: 600000 });
-                return true;
-            } catch (e) {
-                console.log("    error running the tests, or non-zero exit");
-            }
-        }
-        if (p.gulpTest) {
-            console.log("  gulp test");
-            try {
-                child_process.execSync("gulp test", { cwd: output + "/" + id, timeout: 600000 });
-                return true;
-            } catch (e) {
-                console.log("    error running the tests, or non-zero exit");
-            }
-        }
-        if (p.gruntTest) {
-            console.log("  grunt test");
-            try {
-                child_process.execSync("grunt test", { cwd: output + "/" + id, timeout: 600000 });
-                return true;
-            } catch (e) {
-                console.log("    error running the tests, or non-zero exit");
-            }
-        }
-    }
-    return false;
-}
-
-
 function help() {
     console.log("USAGE: node index.js ACTION ...")
     console.log("")
     console.log("Where ACTION is one of the following and ... is the extra arguments for the")
     console.log("selected action. NOTE that all paths must be absolute.")
     download_stars.help();
+    test_runner.help();
 
     // Add your own actions here
     console.log("")
@@ -192,64 +50,32 @@ function help() {
     console.log("    (downloads top 10 JavaScript projects in /home/projects")
 }
 
-
-
 console.log("OH HAI CAN I HAZ NODE?")
-
 if (process.argv.length <= 2) {
+    help();
     console.log("Invalid usage, specify the action");
     process.exit(-1);
 }
 
 let action = process.argv[2];
-if (action === "topStars") {
-    download_stars.download(apiTokens);
-} else if (action === "help") {
-    help();
-} else {
-    console.log("Invalid action name " + action);
-    process.exit(-1);
+switch (action) {
+    case "topStars":
+        download_stars.download(apiTokens);
+        break;
+    case "testable":
+        test_runner.analyzeProjects();
+        break;
+    case "runTests":
+        test_runner.runTests();
+        break;
+    case "help":
+        help();
+        break;
+    default:
+        help();
+        console.log("Invalid action name " + action);
+        process.exit(-1);
 }
 
 console.log("KTHXBYE");
 process.exit();
-
-/*
-
-output = "/data/googlejs/topStars"
-for (let i = 0; i < 1000; ++i)
-    analyzeProject(output, i);
-
-console.log("Total projects        " + sumProjects({}));
-console.log("NPM                   " + sumProjects({ npm: true }));
-console.log("Grunt                 " + sumProjects({ grunt: true }));
-console.log("Gulp                  " + sumProjects({ gulp: true }));
-console.log("bower                 " + sumProjects({ bower: true }));
-console.log("karma                 " + sumProjects({ karma: true }));
-console.log("NPM test              " + sumProjects({ npmTest: true }));
-console.log("Grunt test            " + sumProjects({ gruntTest: true }));
-console.log("Gulp test             " + sumProjects({ gulpTest: true }));
-console.log("bad package.json      " + sumProjects({ badPackageJson: true }));
-console.log("TOTAL TESTABLE        " + sumTestable());
-
-let success = 0;
-
-for (let i = 0; i < 1000; ++i) {
-    if (runTests(output, i))
-        ++ success;
-    console.log("Total: " + i, " success: " + success);
-
-}
-
-console.log("Successfull tests:  " + success);
-
-process.exit(); */
-
-
-
-
-
-//downloadStars("JavaScript","/data/googlejs/topStars", 1000);
-//analyzeProject("/data/googlejs/topStars", 1)
-//console.log(analyzeNPM("/data/googlejs/topStars", 27))
-

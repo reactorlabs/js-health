@@ -3,10 +3,17 @@ const path = require("path");
 const fs = require("fs");
 const readline = require('readline');
 const async = require("async");
+const utils = require("./utils.js");
 
 
 let contentHashes = {}
 let contentHashId = 1
+
+
+let outDir = null;;
+let tmpDir = null;;
+let apiTokens = null;
+let maxFiles = 0;
 
 module.exports = {
 
@@ -18,15 +25,26 @@ module.exports = {
     maxFiles: 10,
 
     help: function() {
-        console.log("TODO");
+        console.log("");
+        console.log("download PROJECTS_FILE OUTPUT [MAX_FILES]")
     },
 
     /** Loads all project urls from the input file into the queue. 
       */
-    download: function(apiTokens) {
-        let filename = process.argc[3];
-
-        child_process.execSync("mkdir -p " + module.exports.outDir + "/files");
+    download: function(api_tokens) {
+        apiTokens = api_tokens;
+        if (process.argv.length < 5 || process.argv.length > 6) {
+            module.exports.help();
+            console.log("Invalid number of arguments for topStars action");
+            process.exit(-1);
+        }
+        let filename = process.argv[3];
+        outDir = process.argv[4];
+        tmpDir = outDir + "/tmp";
+        if (process.argv.length === 6)
+            maxFiles = Number.parseInt(process.argv[5]);
+        utils.mkdir(outDir, "-p");
+        utils.mkdir(tmpDir, "-p");
         console.log("Getting all projects to load...")
         let projects = fs.readFileSync(filename, "utf8").split("\n");
         console.log("loaded " + projects.length + " projects");
@@ -35,7 +53,8 @@ module.exports = {
         let queue = async.queue(processProject, 1);
         queue.drain = () => {
             console.timeEnd("all");
-            console.log("ALL DONE");
+            console.log("KTHXBYE");
+            process.exit();
         }
         queue.push({ name : projects[0], index : 0} );
 /*        const rl = readline.createInterface({
@@ -80,15 +99,15 @@ function snapshotHashToId(hash) {
 
 /** Returns a path for the given snapshot id using the hierarchical scheme */
 function getSubdirForId(id, prefix) {
-    if (module.exports.maxFiles === 0)
+    if (maxFiles === 0)
         return "";
     let result = "";
     let min = 1;
-    let max = module.exports.maxFiles;
-    let dirId = Math.floor(id / module.exports.maxFiles);
+    let max = maxFiles;
+    let dirId = Math.floor(id / maxFiles);
     while (dirId !== 0) {
-        result = result + "/" + prefix + "-" + (dirId % module.exports.maxFiles);
-        dirId = Math.floor(dirId / module.exports.maxFiles);
+        result = result + "/" + prefix + "-" + (dirId % maxFiles);
+        dirId = Math.floor(dirId / maxFiles);
     } 
     return result;
 }
@@ -108,7 +127,7 @@ function ERROR(project, error) {
  */
 function processProject(project, callback) {
     LOG(project, "started processing project " + project.name);
-    project.outDir = module.exports.outDir + "/projects" + getSubdirForId(project.index, "projects");
+    project.outDir = outDir + "/projects" + getSubdirForId(project.index, "projects");
     async.waterfall([
         (callback) => { 
             child_process.exec("mkdir -p " + project.outDir, (error, cout, cerr) => {
@@ -137,10 +156,9 @@ function processProject(project, callback) {
  */
 function downloadProject(project, callback) {
     project.url =  "https://github.com/" + project.name;
-    project.path = module.exports.tmpDir + "/" + project.index;
+    project.path = tmpDir + "/" + project.index;
     LOG(project, "downloading into " + project.path + "...");
-    callback(null, project);
-/*
+//    callback(null, project);
     child_process.exec("git clone " + project.url + " " + project.path,
         (error, cout, cerr) => {
             if (error) {
@@ -151,7 +169,6 @@ function downloadProject(project, callback) {
             }
         }
     );
-    */
 }
 
 /** Gets all the commits in the current branch, parses their hash & time into the project object.
@@ -309,9 +326,9 @@ class Bank {
     constructor() {
         this.index = bankIndex_++;
         this.ready = false;
-        this.remaining = module.exports.maxFiles;
+        this.remaining = maxFiles;
         this.pending = 0;
-        this.path = module.exports.tmpDir+"/bank-" + this.index;
+        this.path = tmpDir+"/bank-" + this.index;
         this.archivename = this.index + " tar.xz";
     }
 
@@ -331,7 +348,7 @@ class Bank {
     }
 
     copyResults(callback) {
-        let dest = module.exports.outDir + "/files/" + this.archiveName;
+        let dest = outDir + "/files/" + this.archiveName;
         child_process.exec("cp " + this.archiveName + " " + dest, {
             cwd: this.path,
         }, (error, cout, cerr) => {
@@ -442,12 +459,12 @@ let apiTokenIndex_ = 0;
 
 
 function loadMetadata(project, callback) {
-    if (module.exports.apiTokens.length == 0) {
+    if (apiTokens.length == 0) {
         callback(null, project);
     } else {
-        let token = module.exports.apiTokens[apiTokenIndex_++];
+        let token = apiTokens[apiTokenIndex_++];
         let apiUrl = "https://api.github.com/repos/" + project.name;
-        if (apiTokenIndex_ == module.exports.apiTokens.length)
+        if (apiTokenIndex_ == apiTokens.length)
             apiTokenIndex_ = 0;
         child_process.exec("curl -D metadata.headers -s " + apiUrl + " -H \"Authorization: token " + token + "\" -o metadata.json", {
             cwd: project.outDir

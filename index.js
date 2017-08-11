@@ -5,6 +5,7 @@ const readline = require('readline');
 const async = require("async");
 const download_stars = require("./stuff/download_stars.js");
 const test_runner = require("./stuff/test_runner.js");
+const download_all = require("./stuff/download_all.js");
 
 apiTokens = [
     "36df491663476ff4a13d53188253d43b5ef6d3c9",
@@ -43,6 +44,7 @@ function help() {
     console.log("selected action. NOTE that all paths must be absolute.")
     download_stars.help();
     test_runner.help();
+    download_all.help();
 
     // Add your own actions here
     console.log("")
@@ -59,6 +61,9 @@ if (process.argv.length <= 2) {
 
 let action = process.argv[2];
 switch (action) {
+    case "download":
+        download_all.download(apiTokens);
+        break;
     case "topStars":
         download_stars.download(apiTokens);
         break;

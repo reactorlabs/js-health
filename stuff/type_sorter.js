@@ -68,7 +68,7 @@ function getResults(ps) {
 	console.log("Total GUI projects: ".concat(GUIs.total));
 	console.log("Total NJS projects: ".concat(NJSs.total));
 	console.log("GUI projects: ".concat(GUIs.urls));
-
+	console.log("NJS projects: ".concat(NJSs.urls));
 };
 
 

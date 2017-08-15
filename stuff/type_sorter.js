@@ -1,12 +1,11 @@
 const { lstatSync, readdirSync } = require('fs');
 const { join } = require('path');
 const isDirectory = source => lstatSync(source).isDirectory();
-const utils = require("./stuff/utils.js");
+const utils = require("./utils.js");
 
 module.exports = {
 	help: function() {},
 	siftProjects: function () {
-		console.log("reached 1");
 		let path = process.argv[3];
 		let num = Number.parseInt(process.argv[4]);
 		let projects = utils.listProjects(path, num);
@@ -20,8 +19,24 @@ module.exports = {
 }
 
 function labelProject(p) {
-	console.log("reached 2");
-	console.log(p.dependencies);
+	const labels = {
+		GUI : ["jquery", "bootstrap"],
+		NJS : ["denodeify"],
+		CLI : ["todo2"]
+	};
+
+	for (let l in labels) {
+		for (let dep of labels[l]) {
+			console.log(p);
+			//console.log(dep);
+			if (p[dep]) {
+				console.log("label found");
+			}
+			else {
+				console.log("not found");
+			}
+		}
+	}
 };
 
 /*

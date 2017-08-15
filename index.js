@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const readline = require('readline');
 const async = require("async");
+const utils = require("./stuff/utils.js");
 const download_stars = require("./stuff/download_stars.js");
 const test_runner = require("./stuff/test_runner.js");
 const download_all = require("./stuff/download_all.js");
@@ -43,6 +44,7 @@ function help() {
     console.log("")
     console.log("Where ACTION is one of the following and ... is the extra arguments for the")
     console.log("selected action. NOTE that all paths must be absolute.")
+    utils.help();
     download_stars.help();
     test_runner.help();
     download_all.help();
@@ -81,6 +83,10 @@ function main() {
         case "sift":
             sift.siftProjects();
             break;
+        case "dev-freqs":
+            utils.devFreqs();
+            break;
+
         default:
             help();
             console.log("Invalid action name " + action);

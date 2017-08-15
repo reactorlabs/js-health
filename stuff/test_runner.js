@@ -79,14 +79,7 @@ function sumProjects(projects, lambda = undefined) {
 
 /** Once the projects are downloaded, analyze if & how their code can be executed. */
 function analyzeProject(p) {
-    p.npm = utils.isFile(p.path + "/package.json");
-    p.bower = utils.isFile(p.path + "/bower.json");
-    p.grunt = utils.isFile(p.path + "/Gruntfile.js");
-    p.gulp = utils.isFile(p.path + "/gulpfile.js"); 
-    p.appveyor = utils.isFile(p.path + "/appveyor.yml");
-    p.travis = utils.isFile(p.path + "/.travis.yml");
-    p.karma = utils.isFile(p.path + "/karma.conf.js");
-    p.karma = p.usesKarma || utils.isFile(p.path + "/.config/karma.conf.js");
+    utils.analyzeProjectTools(p);
     if (p.npm) {
         try {
             let x = fs.readFileSync(p.path + "/package.json", {encoding : "utf8"})

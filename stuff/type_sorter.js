@@ -5,26 +5,31 @@ const utils = require("./utils.js");
 
 module.exports = {
 	help: function() {},
-	siftProjects: function () {
+	siftProjects: function() {
 		let path = process.argv[3];
 		let num = Number.parseInt(process.argv[4]);
 		let projects = utils.listProjects(path, num);
 		for (let p of projects) {
 			utils.analyzeProjectTools(p);
 			utils.analyzeProjectDependencies(p);
+			utils.addMetaData(p);
 			labelProject(p);
 		};
+		getResults(projects);
+
 	},
-	
+	getUrl: function(path) {
+		
+	},
 }
 
 function labelProject(p) {
 	p.labels = {};
 
 	const labels = {
-		GUI : ["jquery", "bootstrap"],
-		NJS : ["denodeify"],
-		CLI : ["chalk"]
+		GUI : ["express", "react"],
+		NJS : ["chalk", "request", "mkdirp", "commander"],
+		CLI : []
 	};
 
 	for (let l in labels) {
@@ -39,8 +44,33 @@ function labelProject(p) {
 		}
 
 	}
-	console.log(p.labels);
+	//console.log(p.labels);
 };
+
+function getResults(ps) {
+	var GUIs = { total: 0, urls: [] };
+	var NJSs = { total: 0, urls: [] };
+	
+	//console.log(ps);
+
+	for (let p of ps) {
+		console.log(p);
+		if (p.labels.GUI) {
+			GUIs.total = GUIs.total + 1;
+			GUIs.urls.push(p.url);
+		};
+		if (p.labels.NJS) {
+			NJSs.total = NJSs.total + 1;
+			NJSs.urls.push(p.url);
+		};
+	}
+
+	console.log("Total GUI projects: ".concat(GUIs.total));
+	console.log("Total NJS projects: ".concat(NJSs.total));
+	console.log("GUI projects: ".concat(GUIs.urls));
+
+};
+
 
 /*
 var chalk       = require('chalk');

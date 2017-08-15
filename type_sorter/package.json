@@ -1,0 +1,24 @@
+{
+  "name": "type_sorter",
+  "version": "1.0.0",
+  "description": "Let's sort some JavaScript files",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^2.1.0",
+    "clear": "0.0.1",
+    "clui": "^0.3.6",
+    "figlet": "^1.2.0",
+    "github": "^9.2.0",
+    "inquirer": "^3.2.1",
+    "lodash": "^4.17.4",
+    "minimist": "^1.2.0",
+    "preferences": "^0.2.1",
+    "simple-git": "^1.75.0",
+    "touch": "^3.1.0"
+  }
+}

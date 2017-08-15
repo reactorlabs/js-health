@@ -107,5 +107,14 @@ module.exports = {
         }
     },
 
-
+    addMetaData : function(project) {
+	try {
+    		let pjson = JSON.parse(fs.readFileSync(project.path + ".json", {encoding: "utf8"}));
+		if (pjson.url !== undefined) {
+			project.url = pjson.url;
+		}
+	} catch (e) {
+		throw "Cannot parse project JSON";
+	}
+    },
 }

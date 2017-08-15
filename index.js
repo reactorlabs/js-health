@@ -6,6 +6,7 @@ const async = require("async");
 const download_stars = require("./stuff/download_stars.js");
 const test_runner = require("./stuff/test_runner.js");
 const download_all = require("./stuff/download_all.js");
+const sift = require("./type_sorter/index.js");
 
 apiTokens = [
     "36df491663476ff4a13d53188253d43b5ef6d3c9",
@@ -45,6 +46,7 @@ function help() {
     download_stars.help();
     test_runner.help();
     download_all.help();
+    sift.help();
 
     // Add your own actions here
     console.log("")
@@ -55,34 +57,37 @@ function help() {
 function main() {
     console.log("OH HAI CAN I HAZ NODE?")
     if (process.argv.length <= 2) {
+    help();
+    console.log("Invalid usage, specify the action");
+    process.exit(-1);
+}
+
+let action = process.argv[2];
+switch (action) {
+    case "download":
+        download_all.download(apiTokens);
+        break;
+    case "topStars":
+        download_stars.download(apiTokens);
+        break;
+    case "testable":
+        test_runner.analyzeProjects();
+        break;
+    case "runTests":
+        test_runner.runTests();
+        break;
+    case "help":
+        help();
+        break;
+    case "sift":
+	sift.siftProjects();
+	break;
+    default:
         help();
         console.log("Invalid usage, specify the action");
         process.exit(-1);
     }
-
-    let action = process.argv[2];
-    switch (action) {
-        case "download":
-            download_all.download(apiTokens);
-            return;
-        case "topStars":
-            download_stars.download(apiTokens);
-            break;
-        case "testable":
-            test_runner.analyzeProjects();
-            break;
-        case "runTests":
-            test_runner.runTests();
-            break;
-        case "help":
-            help();
-            break;
-        default:
-            help();
-            console.log("Invalid action name " + action);
-            process.exit(-1);
-    }
-
+	
     console.log("KTHXBYE");
     process.exit();
 }

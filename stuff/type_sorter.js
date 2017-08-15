@@ -19,24 +19,27 @@ module.exports = {
 }
 
 function labelProject(p) {
+	p.labels = {};
+
 	const labels = {
 		GUI : ["jquery", "bootstrap"],
 		NJS : ["denodeify"],
-		CLI : ["todo2"]
+		CLI : ["chalk"]
 	};
 
 	for (let l in labels) {
+		p.labels[l] = 0;
 		for (let dep of labels[l]) {
-			console.log(p);
-			//console.log(dep);
-			if (p[dep]) {
-				console.log("label found");
+			if (p.dependencies[dep]) {
+				p.labels[l] = p.labels[l] + 1;
 			}
 			else {
-				console.log("not found");
+				// do nothing	
 			}
 		}
+
 	}
+	console.log(p.labels);
 };
 
 /*

@@ -35,14 +35,14 @@ module.exports = {
 
     /** Given a project with `path` property, determines which tools the project uses. */
     analyzeProjectTools : function(p) {
-        p.npm = utils.isFile(p.path + "/package.json");
-        p.bower = utils.isFile(p.path + "/bower.json");
-        p.grunt = utils.isFile(p.path + "/Gruntfile.js");
-        p.gulp = utils.isFile(p.path + "/gulpfile.js"); 
-        p.appveyor = utils.isFile(p.path + "/appveyor.yml");
-        p.travis = utils.isFile(p.path + "/.travis.yml");
-        p.karma = utils.isFile(p.path + "/karma.conf.js");
-        p.karma = p.usesKarma || utils.isFile(p.path + "/.config/karma.conf.js");
+        p.npm = module.exports.isFile(p.path + "/package.json");
+        p.bower =  module.exports.isFile(p.path + "/bower.json");
+        p.grunt =  module.exports.isFile(p.path + "/Gruntfile.js");
+        p.gulp =  module.exports.isFile(p.path + "/gulpfile.js"); 
+        p.appveyor =  module.exports.isFile(p.path + "/appveyor.yml");
+        p.travis =  module.exports.isFile(p.path + "/.travis.yml");
+        p.karma =  module.exports.isFile(p.path + "/karma.conf.js");
+        p.karma = p.usesKarma ||  module.exports.isFile(p.path + "/.config/karma.conf.js");
     },
 
     /** Given a project with tools it uses, analyzes the dependencies of the project. Dependencies are in the form of depName: versionString, version string may be null if version cannot be determined */

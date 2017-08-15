@@ -48,7 +48,7 @@ module.exports = {
     /** Given a project with tools it uses, analyzes the dependencies of the project. Dependencies are in the form of depName: versionString, version string may be null if version cannot be determined */
     analyzeProjectDependencies: function(p) {
         if (p.npm) {
-            let pjson = JSON.parse(p.path + "/package.json");
+            let pjson = JSON.parse(fs.readFileSyc(p.path + "/package.json", {encoding: "utf8"}));
             if (pjson.dependencies === undefined) 
                 p.dependencies = {}
             else

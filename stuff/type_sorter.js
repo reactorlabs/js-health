@@ -1,7 +1,7 @@
 const { lstatSync, readdirSync } = require('fs');
 const { join } = require('path');
 const isDirectory = source => lstatSync(source).isDirectory();
-const utils = require("./../stuff/utils.js");
+const utils = require("./stuff/utils.js");
 
 module.exports = {
 	help: function() {},

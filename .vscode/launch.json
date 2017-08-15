@@ -10,7 +10,7 @@
             "request": "launch",
             "name": "Launch Program",
             "program": "${workspaceRoot}/index.js",
-            "args": [ "download", "/data/test_hdd/input_no_forks.csv", "/data/test_hdd/stuff", "10"]
+            "args": [ "dev-freqs", "/data/googlejs/topStars", "1000", "20"]
         }
     ]
 

@@ -6,6 +6,50 @@ const async = require("async");
 
 
 module.exports = {
+
+    help: function() {
+        console.log("");
+        console.log("dev-freqs OUTPUT NUM MAXRESULTS");
+        console.log("    Looks for up to NUM projects in the OUTPUT directory, loads their");
+        console.log("    dependencies and sorts them by frequency. Prints the MAXRESULTS");
+        console.log("    most frequently used ones.");
+    },
+
+    devFreqs: function() {
+        if (process.argv.length !== 6) {
+            module.exports.help();
+            console.log("Invalid number of arguments for dev-freqs action");
+            process.exit(-1);
+        }
+        let output = process.argv[3];
+        let num = Number.parseInt(process.argv[4]);
+        let maxResults = Number.parseInt(process.argv[5]);
+        let projects = module.exports.listProjects(output, num);
+        for (p of projects) {
+            module.exports.analyzeProjectTools(p);
+            module.exports.analyzeProjectDependencies(p);
+        }
+        let freqMap = {}
+        for (let p of projects) {
+            for (let d in p.dependencies) {
+                if (freqMap[d] === undefined)
+                    freqMap[d] = 1;
+                else
+                    ++freqMap[d]
+            }
+        }
+        let freqs = new Array();
+        for (let d in freqMap)
+            freqs.push({ name: d, freq: freqMap[d] })
+        freqs.sort((x, y) => y.freq - x.freq);
+
+        for (let i = 0; i < Math.min(freqs.length, maxResults); ++i)
+            console.log(freqs[i].name + ": " + freqs[i].freq);
+
+        console.log("TOTAL UNIQUE DEPENDENCIES: " + freqs.length);
+    },
+
+
     isFile: function (path) {
         return fs.existsSync(path) && fs.statSync(path).isFile();
     },
@@ -48,14 +92,20 @@ module.exports = {
     /** Given a project with tools it uses, analyzes the dependencies of the project. Dependencies are in the form of depName: versionString, version string may be null if version cannot be determined */
     analyzeProjectDependencies: function(p) {
         if (p.npm) {
-            let pjson = JSON.parse(fs.readFileSync(p.path + "/package.json", {encoding: "utf8"}));
-            if (pjson.dependencies === undefined) 
-                p.dependencies = {}
-            else
-                p.dependencies = pjson.dependencies
+            try {
+                let pjson = JSON.parse(fs.readFileSync(p.path + "/package.json", {encoding: "utf8"}));
+                if (pjson.dependencies !== undefined) {
+                    p.dependencies = pjson.dependencies;
+                    return;
+                }
+            } catch (e) {
+                // pass
+            }
+            p.dependencies = {}
         } else {
             p.dependencies = {}
         }
     },
+
 
 }

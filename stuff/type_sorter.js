@@ -27,9 +27,9 @@ function labelProject(p) {
 	p.labels = {};
 
 	const labels = {
-		GUI : ["express", "react", "jquery"],
-		NJS : ["chalk", "request", "mkdirp", "commander", "body-parser", "glob", "semver", "minimist", "colors"],
-		CLI : []
+		GUI : ["express", "react", "jquery", "prop-types", "ejs", "react-router"],
+		NJS : ["chalk", "cookie-parser", "fs-extra", "request", "rimraf", "socket.io", "mkdirp", "commander", "body-parser", "glob", "semver", "minimist", "colors", "uglify-js"],
+		CLI : ["chalk", "yargs", "minimist", "optimist", "uglify-js"]
 	};
 
 	for (let l in labels) {
@@ -49,29 +49,21 @@ function labelProject(p) {
 function getResults(ps) {
 	var GUIs = { total: 0, urls: [] };
 	var NJSs = { total: 0, urls: [] };
+	var CLIs = { total: 0, urls: [] };
 	var uncategorized = [];
 	
 	for (let p of ps) {
-		if (p.labels.GUI) {
-			GUIs.total = GUIs.total + 1;
-			// GUIs.urls.push(p.url);
-		};
-		if (p.labels.NJS) {
-			NJSs.total = NJSs.total + 1;
-			// NJSs.urls.push(p.url);
-		};
-	}
-
-	for (let p of ps) {
 		var gui_score = p.labels.GUI;
 		var njs_score = p.labels.NJS;
-		if (gui_score === 0 && njs_score === 0) {
+		var cli_score = p.labels.CLI;
+		if (gui_score === 0 && njs_score === 0 && cli_score === 0) {
 			uncategorized.push(p);
 		}
 		else {
 			console.log(p.url);
 			console.log("  GUI deps: ".concat(gui_score));
 			console.log("  NJS deps: ".concat(njs_score));
+			console.log("  CLI deps: ".concat(cli_score));
 		}
 	}
 	

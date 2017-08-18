@@ -44,17 +44,13 @@ function labelProject(p) {
 		}
 
 	}
-	//console.log(p.labels);
 };
 
 function getResults(ps) {
 	var GUIs = { total: 0, urls: [] };
 	var NJSs = { total: 0, urls: [] };
 	
-	//console.log(ps);
-
 	for (let p of ps) {
-		console.log(p);
 		if (p.labels.GUI) {
 			GUIs.total = GUIs.total + 1;
 			GUIs.urls.push(p.url);
@@ -67,8 +63,10 @@ function getResults(ps) {
 
 	console.log("Total GUI projects: ".concat(GUIs.total));
 	console.log("Total NJS projects: ".concat(NJSs.total));
-	console.log("GUI projects: ".concat(GUIs.urls));
-	console.log("NJS projects: ".concat(NJSs.urls));
+	console.log("\n");
+	console.log("GUI projects: ".concat(GUIs.urls).split(",").join("\n"));
+	console.log("\n");
+	console.log("NJS projects: ".concat(NJSs.urls).split(",").join("\n"));
 };
 
 

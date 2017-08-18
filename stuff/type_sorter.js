@@ -27,8 +27,8 @@ function labelProject(p) {
 	p.labels = {};
 
 	const labels = {
-		GUI : ["express", "react"],
-		NJS : ["chalk", "request", "mkdirp", "commander"],
+		GUI : ["express", "react", "jquery"],
+		NJS : ["chalk", "request", "mkdirp", "commander", "body-parser", "glob", "semver", "minimist", "colors"],
 		CLI : []
 	};
 
@@ -49,24 +49,35 @@ function labelProject(p) {
 function getResults(ps) {
 	var GUIs = { total: 0, urls: [] };
 	var NJSs = { total: 0, urls: [] };
+	var uncategorized = [];
 	
 	for (let p of ps) {
 		if (p.labels.GUI) {
 			GUIs.total = GUIs.total + 1;
-			GUIs.urls.push(p.url);
+			// GUIs.urls.push(p.url);
 		};
 		if (p.labels.NJS) {
 			NJSs.total = NJSs.total + 1;
-			NJSs.urls.push(p.url);
+			// NJSs.urls.push(p.url);
 		};
 	}
 
-	console.log("Total GUI projects: ".concat(GUIs.total));
-	console.log("Total NJS projects: ".concat(NJSs.total));
+	for (let p of ps) {
+		var gui_score = p.labels.GUI;
+		var njs_score = p.labels.NJS;
+		if (gui_score === 0 && njs_score === 0) {
+			uncategorized.push(p);
+		}
+		else {
+			console.log(p.url);
+			console.log("  GUI deps: ".concat(gui_score));
+			console.log("  NJS deps: ".concat(njs_score));
+		}
+	}
+	
 	console.log("\n");
-	console.log("GUI projects: ".concat(GUIs.urls).split(",").join("\n"));
-	console.log("\n");
-	console.log("NJS projects: ".concat(NJSs.urls).split(",").join("\n"));
+	console.log("Total projects: ".concat(ps.length));
+	console.log("Uncategorized projects (no labeled dependencies): ".concat(uncategorized.length))
 };
 
 

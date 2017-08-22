@@ -28,8 +28,26 @@ function labelProject(p) {
 
 	const labels = {
 		GUI : ["express", "react", "jquery", "prop-types", "ejs", "react-router"],
-		NJS : ["chalk", "cookie-parser", "fs-extra", "request", "rimraf", "socket.io", "mkdirp", "commander", "body-parser", "glob", "semver", "minimist", "colors", "uglify-js"],
-		CLI : ["chalk", "yargs", "minimist", "optimist", "uglify-js"]
+		NJS : ["chalk",
+			"compression",
+			"cookie-parser",
+			"fs-extra",
+			"redis",
+			"request",
+			"rimraf",
+			"socket.io",
+			"mkdirp",
+			"commander",
+			"body-parser",
+			"glob",
+			"semver",
+			"minimist",
+			"colors",
+			"uglify-js",
+			"morgan",
+			"winston"],
+		CLI : ["chalk", "yargs", "minimist", "optimist", "uglify-js"],
+		CLS : ["jade"]
 	};
 
 	for (let l in labels) {
@@ -50,13 +68,17 @@ function getResults(ps) {
 	var GUIs = { total: 0, urls: [] };
 	var NJSs = { total: 0, urls: [] };
 	var CLIs = { total: 0, urls: [] };
+	var CLSs = { total: 0, urls: [] }; // Client servers
+
 	var uncategorized = [];
 	
 	for (let p of ps) {
 		var gui_score = p.labels.GUI;
 		var njs_score = p.labels.NJS;
 		var cli_score = p.labels.CLI;
-		if (gui_score === 0 && njs_score === 0 && cli_score === 0) {
+		var cls_score = p.labels.CLS;
+
+		if (gui_score === 0 && njs_score === 0 && cli_score === 0 && cls_score === 0) {
 			uncategorized.push(p);
 		}
 		else {
@@ -64,6 +86,8 @@ function getResults(ps) {
 			console.log("  GUI deps: ".concat(gui_score));
 			console.log("  NJS deps: ".concat(njs_score));
 			console.log("  CLI deps: ".concat(cli_score));
+			console.log("  CLS deps: ".concat(cls_score));
+
 		}
 	}
 	

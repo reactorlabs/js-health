@@ -36,6 +36,7 @@ function labelProject(p) {
 			"request",
 			"rimraf",
 			"socket.io",
+			"through2",
 			"mkdirp",
 			"commander",
 			"body-parser",

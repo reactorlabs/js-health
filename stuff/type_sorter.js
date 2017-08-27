@@ -27,28 +27,102 @@ function labelProject(p) {
 	p.labels = {};
 
 	const labels = {
-		GUI : ["express", "react", "jquery", "prop-types", "ejs", "react-router"],
-		NJS : ["chalk",
-			"compression",
-			"cookie-parser",
-			"fs-extra",
-			"redis",
-			"request",
-			"rimraf",
-			"socket.io",
-			"through2",
-			"mkdirp",
-			"commander",
+		CLI : ["inquirer",
+			"update-notifier"],
+		CLS : ["angular",
 			"body-parser",
-			"glob",
-			"semver",
-			"minimist",
+			"connect",
+			"express",
+			"jade"],
+		DOM : ["angular",
+			"bootstrap",
+			"d3",
+			"ejs",
+			"express",
+			"font-awesome",
+			"jquery",
+			"less",
+			"method-override",
+			"postcss",
+			"react",
+			"react-dom",
+			"react-router",
+			"url-loader"],
+		LIB : ["async",
+			"babel-loader",
+			"babel-runtime",
+			"bluebird",
+			"body-parser",
+			"chalk",
+			"commander",
+			"d3",
+			"debug",
+			"es6-promise",
+			"express",
+			"fs-extra",
+			"gulp-util",
+			"history",
+			"lodash",
+			"minimatch",
+			"mkdirp",
+			"moment",
+			"prop-types",
+			"qs",
+			"react",
+			"react-redux",
+			"request",
+			"source-map",
+			"underscore",
+			"underscore.string",
+			"validator",
+			"winston",
+			"xtend"],
+		NJS : ["chalk",
+			"cheerio",
+			"chokidar",
 			"colors",
-			"uglify-js",
+			"connect",
+			"cookie-parser",
+			"commander",
+			"inquirer",
+			"express",
+			"express-session",
+			"formidable",
+			"fs-extra",
+			"glob",
+			"grunt",
+			"gulp",
+			"gulp-util",
+			"method-override",
+			"minimatch",
+			"minimist",
+			"mkdirp",
+			"mongodb",
+			"mongoose",
 			"morgan",
-			"winston"],
-		CLI : ["chalk", "yargs", "minimist", "optimist", "uglify-js"],
-		CLS : ["jade"]
+			"nodemailer",
+			"passport-local",
+			"compression",
+			"object-assign",
+			"optimist",
+			"passport",
+			"redis",
+			"redux-thunk",
+			"request",
+			"resolve",
+			"rimraf",
+			"semver",
+			"serve-favicon",
+			"socket.io",
+			"socket.io-client",
+			"source-map-support",
+			"through2",
+			"uglify-js",
+			"webpack",
+			"winston",
+			"ws",
+			"yargs",
+			"yeoman-generator"]		
 	};
 
 	for (let l in labels) {
@@ -66,25 +140,23 @@ function labelProject(p) {
 };
 
 function getResults(ps) {
-	var GUIs = { total: 0, urls: [] };
-	var NJSs = { total: 0, urls: [] };
-	var CLIs = { total: 0, urls: [] };
-	var CLSs = { total: 0, urls: [] }; // Client servers
 
 	var uncategorized = [];
 	
 	for (let p of ps) {
-		var gui_score = p.labels.GUI;
+		var dom_score = p.labels.DOM;
+		var lib_score = p.labels.LIB;
 		var njs_score = p.labels.NJS;
 		var cli_score = p.labels.CLI;
 		var cls_score = p.labels.CLS;
 
-		if (gui_score === 0 && njs_score === 0 && cli_score === 0 && cls_score === 0) {
+		if (dom_score === 0 && njs_score === 0 && cli_score === 0 && cls_score === 0 && lib_score === 0) {
 			uncategorized.push(p);
 		}
 		else {
 			console.log(p.url);
-			console.log("  GUI deps: ".concat(gui_score));
+			console.log("  DOM deps: ".concat(dom_score));
+			console.log("  LIB deps: ".concat(lib_score));
 			console.log("  NJS deps: ".concat(njs_score));
 			console.log("  CLI deps: ".concat(cli_score));
 			console.log("  CLS deps: ".concat(cls_score));

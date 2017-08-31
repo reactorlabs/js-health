@@ -91,20 +91,21 @@ module.exports = {
 
     /** Given a project with tools it uses, analyzes the dependencies of the project. Dependencies are in the form of depName: versionString, version string may be null if version cannot be determined */
     analyzeProjectDependencies: function(p) {
+	p.dependencies = {};
+	p.devDependencies = {};
         if (p.npm) {
             try {
                 let pjson = JSON.parse(fs.readFileSync(p.path + "/package.json", {encoding: "utf8"}));
                 if (pjson.dependencies !== undefined) {
-                    p.dependencies = pjson.dependencies;
-                    return;
+                	p.dependencies = pjson.dependencies;
                 }
+		if (pjson.devDependencies !== undefined) {
+			p.devDependencies = pjson.devDependencies;
+		}
             } catch (e) {
                 // pass
             }
-            p.dependencies = {}
-        } else {
-            p.dependencies = {}
-        }
+        } 
     },
 
     addMetaData : function(project) {

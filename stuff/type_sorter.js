@@ -206,11 +206,10 @@ function get_require_stmts(js_files) {
 	for (let f of js_files) {
 		var file_text = fs.readFileSync(f, "utf8");
 		var patt = /require\(['"]([\w-]+)['"]\)/mg;
+
 		if (file_text != undefined) {
-			var path;
-			while ((path = patt.exec(file_text)) != null) {
-				console.log(path[0]);
-			}
+			var path = file_text.match(patt);
+			console.log(path);
 		}
 	}
 };
@@ -239,7 +238,4 @@ function get_js_files(dir) {
 	}
 	return js_files;
 }
-
-
-
 

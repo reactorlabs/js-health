@@ -1,5 +1,6 @@
 const { lstatSync, readdirSync } = require('fs');
 const { join } = require('path');
+const fs = require('fs');
 const isDirectory = source => lstatSync(source).isDirectory();
 const utils = require("./utils.js");
 
@@ -16,7 +17,7 @@ module.exports = {
 			labelProject(p);
 		};
 		getResults(projects);
-
+		get_stats(path);
 	}
 }
 
@@ -151,8 +152,6 @@ function labelProject(p) {
 	for (let l in labels) {
 		p.labels[l] = 0;
 		for (let dep of labels[l]) {
-			//console.log(p.dependencies);
-			//console.log(p);
 			if (p.dependencies[dep]) {
 				p.labels[l] = p.labels[l] + 1;
 			}
@@ -195,7 +194,50 @@ function getResults(ps) {
 	console.log("Total projects: ".concat(ps.length));
 	console.log("Uncategorized projects (no labeled dependencies): ".concat(uncategorized.length));
 	console.log("\n\n");
-	//console.log(uncategorized);
+};
+
+
+function get_stats(path) {
+	var js_files = get_js_files(path); 
+	get_require_stmts(js_files);
+}
+
+function get_require_stmts(js_files) {
+	for (let f of js_files) {
+		var file_text = fs.readFileSync(f, "utf8");
+		var patt = /require\(['"]([\w-]+)['"]\)/mg;
+		if (file_text != undefined) {
+			var path;
+			while ((path = patt.exec(file_text)) != null) {
+				console.log(path[0]);
+			}
+		}
+	}
+};
+
+function get_js_files(dir) {
+	var lastchar = dir.substring(dir.length - 1, dir.length);
+	if (lastchar === "/") {
+		dir = dir.substring(0, dir.length - 1);
+	}
+	var files_in_path = fs.readdirSync(dir);
+	var js_files = [];
+	for (let f of files_in_path) {
+		var _f = dir.concat("/").concat(f);
+		if (fs.lstatSync(_f).isDirectory()) {
+			js_files.push.apply(js_files, get_js_files(_f));
+		}
+		else if (fs.lstatSync(_f).isFile()) {
+			var ext = _f.substring(_f.length - 3, _f.length);
+			if (ext === ".js") {
+				js_files.push(_f);
+			}
+		}
+		else {
+			// pass
+		}
+	}
+	return js_files;
 }
 
 

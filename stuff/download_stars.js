@@ -25,16 +25,16 @@ module.exports = {
         }
         let output = process.argv[3];
         let numProjects = Number.parseInt(process.argv[4]);
-        let language = process.argv[5]
+        let language = process.argv[5];
         console.log("Downloading top " + numProjects + " projects...");
-        utils.mkdir(output, "-p");
+        //utils.mkdir(output, "-p");
         console.log("  language:     " + language);
         console.log("  output dir:   " + output);
         let stars = undefined;
         let projects = {};
         let tidx = 0;
-        let page = 11
-        let url = ""
+        let page = 11;
+        let url = "";
         let pid = 0;
         while (pid < numProjects) {
             if (page === 11) {
@@ -65,7 +65,7 @@ module.exports = {
                 if (pid >= numProjects)
                     return;
             }
-            page = page + 1
+            page = page + 1;
         }
     }
 }

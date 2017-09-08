@@ -17,7 +17,8 @@ module.exports = {
 			labelProject(p);
 		};
 		getResults(projects);
-		get_stats(path);
+		var package_stats = get_stats(path);
+		console.log(package_stats);
 	}
 }
 
@@ -199,19 +200,27 @@ function getResults(ps) {
 
 function get_stats(path) {
 	var js_files = get_js_files(path); 
-	get_require_stmts(js_files);
+	var require_stats = tally_require_stmts(js_files);
+	return require_stats;
 }
 
-function get_require_stmts(js_files) {
+function tally_require_stmts(js_files) {
+	var pkgs = {};
 	for (let f of js_files) {
 		var file_text = fs.readFileSync(f, "utf8");
-		var patt = /require\(['"]([\w-]+)['"]\)/mg;
-
-		if (file_text != undefined) {
-			var path = file_text.match(patt);
-			console.log(path);
+		var patt = /^require\(['"]([\w-]+)['"]\)/gm;
+		var path;
+		while ((path = patt.exec(file_text)) !== null) {
+			if (pkgs[path[1]] !== undefined) {
+				pkgs[path[1]] = pkgs[path[1]] + 1;
+			}
+			else {
+				pkgs[path[1]] = 1;
+			}
 		}
 	}
+
+	return pkgs;
 };
 
 function get_js_files(dir) {

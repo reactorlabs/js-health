@@ -23,13 +23,13 @@ module.exports = {
 			utils.analyzeProjectDependencies(p);
 			utils.addMetaData(p);
 			labelProject(p);
-			all_stats.push([p.url, proj_stats(p)]);
+			all_stats.push([p.url, projStats(p)]);
 		};
 		
 		categorized = getResults(projects);
-		scored_stats = get_njs_scores(all_stats, categorized);
-		scored_stats = sort_tally(scored_stats);
-		print_results(scored_stats);
+		scored_stats = getNJSScores(all_stats, categorized);
+		scored_stats = sortTally(scored_stats);
+		printResults(scored_stats);
 		}
 };
 
@@ -157,28 +157,6 @@ const labels = {
 		"yeoman-generator"]		
 };
 
-// NOTE: not being used
-function add_dep_tallies(combined_stats, categorized) {
-	for (var ds = 0; ds < combined_stats.length; ds++) {
-		for (var p = 0; p < combined_stats[ds][2].length; p++) {
-			combined_stats[ds][2][p] = [combined_stats[ds][2][p], 0];
-			
-			for (let labeled_proj of categorized) {
-				if (combined_stats[ds][2][p][0] === labeled_proj[0]) {
-					combined_stats[ds][2][p][1] = labeled_proj[5];
-				}
-				else {
-					// skip
-				}
-			}
-			
-		}
-	}
-
-
-	return combined_stats;
-};
-
 /** 		
  * all-stats: [project-url, [js-files]]
  *
@@ -186,9 +164,7 @@ function add_dep_tallies(combined_stats, categorized) {
  *
  * return: [[project-url, NJS_score], [js-files]]
  */
-function get_njs_scores(all_stats, categorized) {
-	//console.log("CATEGORIZED:");
-	//console.log(categorized);
+function getNJSScores(all_stats, categorized) {
 	for (var p = 0; p < all_stats.length; p++) {
 		var found = false;
 		for (let c of categorized) {
@@ -204,45 +180,13 @@ function get_njs_scores(all_stats, categorized) {
 	return all_stats;
 };
 
-function print_results(stats) {
+function printResults(stats) {
 	for (let proj of stats) {
-		//console.log(proj);
 		console.log("Project:  ".concat(proj[0][0]));
 		console.log("    NJS:  ".concat(proj[0][1]));
 		console.log("    required-stmts:  ".concat(Object.keys(proj[1]).length));
 	}
 
-};
-
-/**
- * tups: [project-url, { required-file: [ location, location ], ... }]
- *
- * Combines require statements into one big dictionary, listing projects where they are used
- *
- * NOTE: not currently being used
- */
-function combine_stats(tups) {
-	var total_stats = {};
-	for (let t of tups) {
-		//console.log("TUP?");
-		//console.log(t);
-		//console.log(t[1]);
-		if (Object.keys(t[1]).length !== 0) {
-			for (let dep of Object.keys(t[1])) {
-				//console.log("DEP");
-				//console.log(dep);
-				if (total_stats[dep]) {
-					var new_total = total_stats[dep][0] + 1;
-					total_stats[dep][1].push(t[0]);
-					total_stats[dep][0] = new_total;
-				}
-				else {
-					total_stats[dep] = [1, [t[0]]];
-				}
-			}
-		}
-	}
-	return total_stats;
 };
 
 
@@ -252,8 +196,7 @@ function combine_stats(tups) {
  * [[filename, project-directory]
  *  ... ]
  */
-
-function get_js_files(dir, proj) {
+function getJSFiles(dir, proj) {
 	var lastchar = dir.substring(dir.length - 1, dir.length);
 	if (lastchar === "/") {
 		dir = dir.substring(0, dir.length - 1);
@@ -263,7 +206,7 @@ function get_js_files(dir, proj) {
 	for (let f of files_in_path) {
 		var _f = dir.concat("/").concat(f);
 		if (fs.lstatSync(_f).isDirectory()) {
-			js_files.push.apply(js_files, get_js_files(_f, proj));
+			js_files.push.apply(js_files, getJSFiles(_f, proj));
 		}
 		else if (fs.lstatSync(_f).isFile()) {
 			var ext = _f.substring(_f.length - 3, _f.length);
@@ -295,14 +238,6 @@ function getResults(ps) {
 		}
 		else {
 			categorized.push([p.url, cli_score, cls_score, dom_score, lib_score, njs_score]);
-			/**
-			console.log(p.url);
-			console.log("  DOM deps: ".concat(dom_score));
-			console.log("  LIB deps: ".concat(lib_score));
-			console.log("  NJS deps: ".concat(njs_score));
-			console.log("  CLI deps: ".concat(cli_score));
-			console.log("  CLS deps: ".concat(cls_score));
-			*/
 		}
 	}
 	
@@ -334,33 +269,20 @@ function labelProject(p) {
 	}
 };
 
-function proj_stats(proj) {
-	var js_files = get_js_files(proj.path, proj.path);
-	var require_stats = tally_require_stmts(js_files);
-	//return sort_tally(require_stats);
+function projStats(proj) {
+	var js_files = getJSFiles(proj.path, proj.path);
+	var require_stats = tallyRequireStmts(js_files);
 	return require_stats;
 };
 
 /**
  * dict:  [[project-url, NJS_score], [js-files]]
  */
-
-function sort_tally(projects) {
+function sortTally(projects) {
 	return projects.sort(function(a, b) {return b[0][1] - a[0][1]})	
 };
 
-// NOTE: no longer used
-function sort_tally_old(dict) {
-	var arr = [];
-	for (var key in dict) {
-		//arr.push([dict[key], key]);
-		arr.push([key, dict[key][0], dict[key][1]]);
-	}
-	arr.sort(function(a, b) {return b[1] - a[1]});
-	return arr;
-};
-
-function tally_require_stmts(js_files) {
+function tallyRequireStmts(js_files) {
 	var pkgs = {};
 	for (let tup of js_files) {
 		var f = tup[0];
@@ -382,5 +304,3 @@ function tally_require_stmts(js_files) {
 
 	return pkgs;
 };
-
-

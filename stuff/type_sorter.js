@@ -7,12 +7,17 @@ const utils = require("./utils.js");
 module.exports = {
 	help: function() {},
 	siftProjects: function() {
+		/**
+		 * [project-url, [js-files]]
+		 */
+		var all_stats = [];
+		var categorized;
+		var scored_stats;
+
 		let path = process.argv[3];
 		let num = Number.parseInt(process.argv[4]);
 		let projects = utils.listProjects(path, num);
-		var all_stats = [];
-		var categorized;
-		var combined_stats;
+		
 		for (let p of projects) {
 			utils.analyzeProjectTools(p);
 			utils.analyzeProjectDependencies(p);
@@ -20,14 +25,13 @@ module.exports = {
 			labelProject(p);
 			all_stats.push([p.url, proj_stats(p)]);
 		};
+		
 		categorized = getResults(projects);
-
-		combined_stats = combine_stats(all_stats);
-		combined_stats = sort_tally(combined_stats);
-		combined_sats = add_dep_tallies(combined_stats, categorized);
-		print_results(combined_stats);
+		scored_stats = get_njs_scores(all_stats, categorized);
+		scored_stats = sort_tally(scored_stats);
+		print_results(scored_stats);
 		}
-}
+};
 
 const labels = {
 	CLI : ["babel-core",
@@ -153,6 +157,7 @@ const labels = {
 		"yeoman-generator"]		
 };
 
+// NOTE: not being used
 function add_dep_tallies(combined_stats, categorized) {
 	for (var ds = 0; ds < combined_stats.length; ds++) {
 		for (var p = 0; p < combined_stats[ds][2].length; p++) {
@@ -174,22 +179,58 @@ function add_dep_tallies(combined_stats, categorized) {
 	return combined_stats;
 };
 
-function print_results(stats) {
-	for (var cs = 0; cs < stats.length; cs++) {
-		console.log("Dependency: ".concat(stats[cs][0]));
-		console.log("Popularity (times used): ".concat(stats[cs][1]));
-		for (var ps = 0; ps < stats[cs][2].length; ps++) {
-			console.log("    Project,         NJS score");
-			console.log("    ".concat(stats[cs][2][ps]));
+/** 		
+ * all-stats: [project-url, [js-files]]
+ *
+ * categorized: [[ project-url, CLI, CLS, DOM, LIB, NJS ... ] ... ]
+ *
+ * return: [[project-url, NJS_score], [js-files]]
+ */
+function get_njs_scores(all_stats, categorized) {
+	//console.log("CATEGORIZED:");
+	//console.log(categorized);
+	for (var p = 0; p < all_stats.length; p++) {
+		var found = false;
+		for (let c of categorized) {
+			if (all_stats[p][0] === c[0]) {
+				all_stats[p][0] = [all_stats[p][0], c[5]];
+				found = true;
+			}
+		}
+		if (found === false) {
+			all_stats[p][0] = [ all_stats[p][0], 0];
 		}
 	}
-}
+	return all_stats;
+};
 
+function print_results(stats) {
+	for (let proj of stats) {
+		//console.log(proj);
+		console.log("Project:  ".concat(proj[0][0]));
+		console.log("    NJS:  ".concat(proj[0][1]));
+		console.log("    required-stmts:  ".concat(Object.keys(proj[1]).length));
+	}
+
+};
+
+/**
+ * tups: [project-url, { required-file: [ location, location ], ... }]
+ *
+ * Combines require statements into one big dictionary, listing projects where they are used
+ *
+ * NOTE: not currently being used
+ */
 function combine_stats(tups) {
 	var total_stats = {};
 	for (let t of tups) {
+		//console.log("TUP?");
+		//console.log(t);
+		//console.log(t[1]);
 		if (Object.keys(t[1]).length !== 0) {
 			for (let dep of Object.keys(t[1])) {
+				//console.log("DEP");
+				//console.log(dep);
 				if (total_stats[dep]) {
 					var new_total = total_stats[dep][0] + 1;
 					total_stats[dep][1].push(t[0]);
@@ -203,6 +244,14 @@ function combine_stats(tups) {
 	}
 	return total_stats;
 };
+
+
+/**
+ * Returns:
+ *
+ * [[filename, project-directory]
+ *  ... ]
+ */
 
 function get_js_files(dir, proj) {
 	var lastchar = dir.substring(dir.length - 1, dir.length);
@@ -292,7 +341,16 @@ function proj_stats(proj) {
 	return require_stats;
 };
 
-function sort_tally(dict) {
+/**
+ * dict:  [[project-url, NJS_score], [js-files]]
+ */
+
+function sort_tally(projects) {
+	return projects.sort(function(a, b) {return b[0][1] - a[0][1]})	
+};
+
+// NOTE: no longer used
+function sort_tally_old(dict) {
 	var arr = [];
 	for (var key in dict) {
 		//arr.push([dict[key], key]);

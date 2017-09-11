@@ -162,7 +162,7 @@ const labels = {
  *
  * categorized: [[ project-url, CLI, CLS, DOM, LIB, NJS ... ] ... ]
  *
- * return: [[project-url, NJS_score], [js-files]]
+ * return: [[project-url, NJS_score], {js-files}]
  */
 function getNJSScores(all_stats, categorized) {
 	for (var p = 0; p < all_stats.length; p++) {
@@ -180,13 +180,18 @@ function getNJSScores(all_stats, categorized) {
 	return all_stats;
 };
 
+/**
+ * stats:  [[project-url, NJS_score], [js-files]]
+ */
 function printResults(stats) {
 	for (let proj of stats) {
 		console.log("Project:  ".concat(proj[0][0]));
 		console.log("    NJS:  ".concat(proj[0][1]));
-		console.log("    required-stmts:  ".concat(Object.keys(proj[1]).length));
+		console.log("    require-stmts:  ".concat(Object.keys(proj[1]).length));
+		for (let req of Object.keys(proj[1])) {
+			console.log("        ".concat(req));
+		}
 	}
-
 };
 
 
@@ -276,7 +281,7 @@ function projStats(proj) {
 };
 
 /**
- * dict:  [[project-url, NJS_score], [js-files]]
+ * return:  [[project-url, NJS_score], {js-files}]
  */
 function sortTally(projects) {
 	return projects.sort(function(a, b) {return b[0][1] - a[0][1]})	

@@ -23,13 +23,14 @@ module.exports = {
 			utils.analyzeProjectDependencies(p);
 			utils.addMetaData(p);
 			labelProject(p);
-			all_stats.push([p.url, projStats(p)]);
+			all_stats.push([p.url, projStats(p), p.path]);
 		};
 		
 		categorized = getResults(projects);
 		scored_stats = getNJSScores(all_stats, categorized);
 		scored_stats = sortTally(scored_stats);
 		printResults(scored_stats);
+		//console.log(scored_stats);
 		}
 };
 
@@ -186,6 +187,7 @@ function getNJSScores(all_stats, categorized) {
 function printResults(stats) {
 	for (let proj of stats) {
 		console.log("Project:  ".concat(proj[0][0]));
+		console.log("Path:     ".concat(proj[2]));
 		console.log("    NJS:  ".concat(proj[0][1]));
 		console.log("    require-stmts:  ".concat(Object.keys(proj[1]).length));
 		for (let req of Object.keys(proj[1])) {

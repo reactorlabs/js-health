@@ -248,10 +248,7 @@ function getResults(ps) {
 		}
 	}
 	
-	console.log("\n");
-	console.log("Total projects: ".concat(ps.length));
-	console.log("Uncategorized projects (no labeled dependencies): ".concat(uncategorized.length));
-	console.log("\n\n");
+	printLabels(ps.length, uncategorized.length);
 
 	return categorized;
 };
@@ -274,6 +271,13 @@ function labelProject(p) {
 		}
 
 	}
+};
+
+function  printLabels(total_num, unlabeled_num) {
+	console.log("\n");
+	console.log("Total projects: ".concat(total_num));
+	console.log("Uncategorized projects (no labeled dependencies): ".concat(unlabeled_num));
+	console.log("\n\n");
 };
 
 function projStats(proj) {

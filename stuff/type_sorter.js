@@ -158,6 +158,9 @@ const labels = {
 		"yeoman-generator"]		
 };
 
+const black = "\x1b[30m";
+const red = "\x1b[31m";
+
 /** 		
  * all-stats: [project-url, [js-files]]
  *
@@ -186,13 +189,20 @@ function getNJSScores(all_stats, categorized) {
  */
 function printResults(stats) {
 	for (let proj of stats) {
-		console.log("Project:  ".concat(proj[0][0]));
-		console.log("Path:     ".concat(proj[2]));
-		console.log("    NJS:  ".concat(proj[0][1]));
-		console.log("    require-stmts:  ".concat(Object.keys(proj[1]).length));
-		for (let req of Object.keys(proj[1])) {
-			console.log("        ".concat(req));
+		var color = black;
+		var req_num = Object.keys(proj[1]).length;
+		if (((proj[0][1] === 0) && (req_num > 0)) ||
+			((proj[0][1] > 0) && (req_num === 0))){
+			color = red;
 		}
+		console.log(color, "Project:  ".concat(proj[0][0]));
+		console.log(color, "Path:     ".concat(proj[2]));
+		console.log(color, "    NJS:  ".concat(proj[0][1]));
+		console.log(color, "    require-stmts:  ".concat(req_num));
+		for (let req of Object.keys(proj[1])) {
+			console.log(color, "        ".concat(req));
+		}
+		console.log(black, " ");
 	}
 };
 

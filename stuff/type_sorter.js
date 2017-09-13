@@ -309,16 +309,22 @@ function tallyRequireStmts(js_files) {
 		var f = tup[0];
 		var pkg = tup[1];
 		var file_text = fs.readFileSync(f, "utf8");
-		var patt = /^require\(['"]([\w-]+)['"]\)/gm;
+		var patt = /require\(['"]([^)]+)['"]\)/gm;
 		var path;
 		while ((path = patt.exec(file_text)) !== null) {
 			var pname = path[1];
-			if (pkgs[pname] !== undefined) {
-				pkgs[pname][0] = pkgs[pname][0] + 1;
-				pkgs[pname][1].push(pkg);
+			try {
+				if (pkgs[pname] !== undefined) {
+					//console.log(pkgs[pname]);
+					pkgs[pname][0] = pkgs[pname][0] + 1;
+					pkgs[pname][1].push(pkg);
+				}
+				else {
+					pkgs[pname] = [1, [pkg]];			
+				}
 			}
-			else {
-				pkgs[pname] = [1, [pkg]];			
+			catch (err) {
+				console.log("Error: ".concat(pkgs.pname).concat(" ").concat(err));
 			}
 		}
 	}

@@ -1,8 +1,9 @@
-const { lstatSync, readdirSync } = require('fs');
+const { lstatSync, readdirSync, readFileSync, writeFileSync, appendFileSync } = require('fs');
 const { join } = require('path');
-const fs = require('fs');
 const isDirectory = source => lstatSync(source).isDirectory();
 const utils = require("./utils.js");
+
+var util = require('util');
 
 module.exports = {
 	help: function() {},
@@ -29,11 +30,18 @@ module.exports = {
 		categorized = getResults(projects);
 		scored_stats = getNJSScores(all_stats, categorized);
 		scored_stats = sortTally(scored_stats);
-		printResults(scored_stats);
+		processResults(scored_stats);
+		makeScatterplot(scored_stats);
+
 		//console.log(scored_stats);
 		}
 };
 
+
+// var fs = require('fs');
+
+const black = "\x1b[30m";
+const red = "\x1b[31m";
 const labels = {
 	CLI : ["babel-core",
 		"browserify",
@@ -158,8 +166,6 @@ const labels = {
 		"yeoman-generator"]		
 };
 
-const black = "\x1b[30m";
-const red = "\x1b[31m";
 
 /** 		
  * all-stats: [project-url, [js-files]]
@@ -185,25 +191,68 @@ function getNJSScores(all_stats, categorized) {
 };
 
 /**
- * stats:  [[project-url, NJS_score], [js-files]]
+ * [[url, njs], {req: file ...}]
  */
-function printResults(stats) {
+function processResults(stats) {
+	var total = 0; // number of requires
+	var zero_aberrant = []; // NJS == 0 && number of requires > 0
+	var gt_zero_aberrant = []; // NJS > 0 && number of requires == 0
 	for (let proj of stats) {
-		var color = black;
-		var req_num = Object.keys(proj[1]).length;
-		if (((proj[0][1] === 0) && (req_num > 0)) ||
-			((proj[0][1] > 0) && (req_num === 0))){
-			color = red;
+		var njs = proj[0][1];
+		var path = proj[2];
+		var proj_url = proj[0][0]; // project url
+		req_num = Object.keys(proj[1]).length;
+
+		if ((njs === 0) && (req_num > 0)) {
+			gt_zero_aberrant.push([proj_url, path, njs, proj[1]]);
 		}
-		console.log(color, "Project:  ".concat(proj[0][0]));
-		console.log(color, "Path:     ".concat(proj[2]));
-		console.log(color, "    NJS:  ".concat(proj[0][1]));
-		console.log(color, "    require-stmts:  ".concat(req_num));
-		for (let req of Object.keys(proj[1])) {
-			console.log(color, "        ".concat(req));
+		if ((njs === 0) && (req_num === 0)) {
+			zero_aberrant.push([proj_url, path, njs, proj[1]]);
 		}
-		console.log(black, " ");
 	}
+	printResults(zero_aberrant, gt_zero_aberrant, stats.length);
+};
+
+/**
+ * zero_aberrant: [url, path, njs_score, requires]
+ * gt_zero_aberrant: "
+ * total: int
+ */
+function printResults(zero_aberrant, gt_zero_aberrant, total) {
+	var encoding = "utf-8";
+	var ratio = (zero_aberrant.length + gt_zero_aberrant.length) / total;
+	var filename = "aberration_report.txt";
+	
+	// Strings
+	var print_ratio = util.format('Percent aberrant projects:  %d', ratio);
+
+	console.log(print_ratio.concat("\n"));
+	
+	// make file, print ratio
+	writeFileSync(filename, print_ratio, encoding);
+
+	// print info for files where njs == 0
+	appendFileSync(filename, "\n\nFiles where (NJS == 0) && (reqs > 0)\n\n");
+	for (let proj of zero_aberrant) {
+		var line = getline(proj);
+		appendFileSync(filename, line);	
+	}
+	appendFileSync(filename, "\n\n\nFiles where (NJS == 0) && (reqs == 0)\n\n");
+	for (let proj of gt_zero_aberrant) {
+		var line = getline(proj);
+		appendFileSync(filename, line);
+	}
+	
+	function getline(p) {
+		// url, path, njs
+		var info = util.format('%s\n    %s    %d\n', p[0], p[1], p[2]);
+		var reqs = "";
+		for (let r of Object.keys(p[3])) {
+			var reqline = util.format('      %s\n', r);
+			reqs.concat(reqline);
+		}
+		return info.concat(reqs);
+	};
 };
 
 
@@ -218,14 +267,14 @@ function getJSFiles(dir, proj) {
 	if (lastchar === "/") {
 		dir = dir.substring(0, dir.length - 1);
 	}
-	var files_in_path = fs.readdirSync(dir);
+	var files_in_path = readdirSync(dir);
 	var js_files = [];
 	for (let f of files_in_path) {
 		var _f = dir.concat("/").concat(f);
-		if (fs.lstatSync(_f).isDirectory()) {
+		if (lstatSync(_f).isDirectory()) {
 			js_files.push.apply(js_files, getJSFiles(_f, proj));
 		}
-		else if (fs.lstatSync(_f).isFile()) {
+		else if (lstatSync(_f).isFile()) {
 			var ext = _f.substring(_f.length - 3, _f.length);
 			if (ext === ".js") {
 				js_files.push([_f, proj]);
@@ -283,11 +332,33 @@ function labelProject(p) {
 	}
 };
 
+function makeScatterplot(stats) {
+	var filename = "scatterplot.R";
+	var njs_axis = "njs <- c(";
+	var req_axis = "req <- c(";
+	for (let entry of stats) {
+		njs_axis = njs_axis.concat(" ".concat(entry[0][1]).concat(","));
+		req_axis = req_axis.concat(" ".concat(Object.keys(entry[1]).length).concat(","));
+	}
+
+	// remove last comma
+	njs_axis = njs_axis.substring(0, njs_axis.length - 1);
+	req_axis = req_axis.substring(0, req_axis.length - 1);
+
+	njs_axis = njs_axis.concat(")\n");
+	req_axis = req_axis.concat(")\n");
+	df = "df = data.frame(njs, req)\n";
+	plot = "with(df, plot(njs, req, xlab='NJS Score', ylab='Number Require Statements'))";
+
+	var out = njs_axis.concat(req_axis).concat(df).concat(plot);
+
+	writeFileSync(filename, out, "utf-8");
+
+};
+
 function  printLabels(total_num, unlabeled_num) {
-	console.log("\n");
-	console.log("Total projects: ".concat(total_num));
+	console.log("\nTotal projects: ".concat(total_num));
 	console.log("Uncategorized projects (no labeled dependencies): ".concat(unlabeled_num));
-	console.log("\n\n");
 };
 
 function projStats(proj) {
@@ -308,7 +379,7 @@ function tallyRequireStmts(js_files) {
 	for (let tup of js_files) {
 		var f = tup[0];
 		var pkg = tup[1];
-		var file_text = fs.readFileSync(f, "utf8");
+		var file_text = readFileSync(f, "utf8");
 		var patt = /require\(['"]([^)]+)['"]\)/gm;
 		var path;
 		while ((path = patt.exec(file_text)) !== null) {

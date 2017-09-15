@@ -206,7 +206,7 @@ function processResults(stats) {
 		if ((njs === 0) && (req_num > 0)) {
 			gt_zero_aberrant.push([proj_url, path, njs, proj[1]]);
 		}
-		if ((njs === 0) && (req_num === 0)) {
+		if ((njs > 0) && (req_num === 0)) {
 			zero_aberrant.push([proj_url, path, njs, proj[1]]);
 		}
 	}
@@ -231,13 +231,13 @@ function printResults(zero_aberrant, gt_zero_aberrant, total) {
 	// make file, print ratio
 	writeFileSync(filename, print_ratio, encoding);
 
-	// print info for files where njs == 0
+	// print info for files where njs & reqs have bad values
 	appendFileSync(filename, "\n\nFiles where (NJS == 0) && (reqs > 0)\n\n");
 	for (let proj of zero_aberrant) {
 		var line = getline(proj);
 		appendFileSync(filename, line);	
 	}
-	appendFileSync(filename, "\n\n\nFiles where (NJS == 0) && (reqs == 0)\n\n");
+	appendFileSync(filename, "\n\n\nFiles where (NJS > 0) && (reqs == 0)\n\n");
 	for (let proj of gt_zero_aberrant) {
 		var line = getline(proj);
 		appendFileSync(filename, line);
@@ -245,9 +245,10 @@ function printResults(zero_aberrant, gt_zero_aberrant, total) {
 	
 	function getline(p) {
 		// url, path, njs
-		var info = util.format('%s\n    %s    %d\n', p[0], p[1], p[2]);
+		var keys = Object.keys(p[3]);
+		var info = util.format('%s\n    %s\n    NJS: %d     Require stmts: %d\n', p[0], p[1], p[2], keys.length);
 		var reqs = "";
-		for (let r of Object.keys(p[3])) {
+		for (let r of keys) {
 			var reqline = util.format('      %s\n', r);
 			reqs.concat(reqline);
 		}

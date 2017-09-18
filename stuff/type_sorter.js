@@ -170,21 +170,24 @@ const labels = {
 /** 		
  * all-stats: [project-url, [js-files]]
  *
- * categorized: [[ project-url, CLI, CLS, DOM, LIB, NJS ... ] ... ]
+ * categorized: [[ project-url, CLI, CLS, DOM, LIB, NJS ... ] ... ] // these are only the labeled projects
  *
  * return: [[project-url, NJS_score], {js-files}]
  */
 function getNJSScores(all_stats, categorized) {
 	for (var p = 0; p < all_stats.length; p++) {
 		var found = false;
+		// NOTE: Right now all other labels are added together in all_stats[p][0][2]
 		for (let c of categorized) {
 			if (all_stats[p][0] === c[0]) {
-				all_stats[p][0] = [all_stats[p][0], c[5]];
+				var other_labels = c[1] + c[2] + c[3] + c[4];
+				all_stats[p][0] = [all_stats[p][0], c[5], other_labels];
 				found = true;
 			}
 		}
+		// project has no labels
 		if (found === false) {
-			all_stats[p][0] = [ all_stats[p][0], 0];
+			all_stats[p][0] = [ all_stats[p][0], 0, 0];
 		}
 	}
 	return all_stats;
@@ -197,6 +200,7 @@ function processResults(stats) {
 	var total = 0; // number of requires
 	var zero_aberrant = []; // NJS == 0 && number of requires > 0
 	var gt_zero_aberrant = []; // NJS > 0 && number of requires == 0
+	var no_labels = [];
 	for (let proj of stats) {
 		var njs = proj[0][1];
 		var path = proj[2];
@@ -204,13 +208,19 @@ function processResults(stats) {
 		req_num = Object.keys(proj[1]).length;
 
 		if ((njs === 0) && (req_num > 0)) {
-			gt_zero_aberrant.push([proj_url, path, njs, proj[1]]);
+			if (proj[0][2] > 0) {
+				gt_zero_aberrant.push([proj_url, path, njs, proj[1]]);
+			}
+			else {
+				no_labels.push([proj_url, path, njs, proj[1]]);
+			}
 		}
 		if ((njs > 0) && (req_num === 0)) {
+			
 			zero_aberrant.push([proj_url, path, njs, proj[1]]);
 		}
 	}
-	printResults(zero_aberrant, gt_zero_aberrant, stats.length);
+	printResults(zero_aberrant, gt_zero_aberrant, stats.length, no_labels);
 };
 
 /**
@@ -218,16 +228,16 @@ function processResults(stats) {
  * gt_zero_aberrant: "
  * total: int
  */
-function printResults(req_zero_aberrant, req_gt_zero_aberrant, total) {
+function printResults(req_zero_aberrant, req_gt_zero_aberrant, total, no_labels) {
 	var encoding = "utf-8";
-	var ratio = (req_zero_aberrant.length + req_gt_zero_aberrant.length) / total;
-	var false_pos = req_gt_zero_aberrant.length / total;
-	var false_neg = req_zero_aberrant.length / total;
+	var ratio = ((req_zero_aberrant.length + req_gt_zero_aberrant.length) / total) * 100;
+	var false_pos = (req_gt_zero_aberrant.length / total) * 100;
+	var false_neg = (req_zero_aberrant.length / total) * 100;
+	var no_label_percent = (no_labels.length / total) * 100;
 	var filename = "aberration_report.txt";
 	
 	// Strings
-	var print_ratios = util.format('Percent aberrant projects:  %d\nPercent false positives (NJS > 0 && requires == 0):  %d\nPercent false negatives (NJS == 0 && requires > 0):  %d\n\n', ratio, false_neg, false_pos);
-
+	var print_ratios = util.format('Percent aberrant projects:  %d\nPercent false positives (NJS > 0 && requires == 0):  %d\nPercent false negatives (NJS == 0 && requires > 0):  %d\n\nPercent unlabeled projects: %d\n\n', ratio, false_neg, false_pos, no_label_percent);
 
 	console.log(print_ratios);
 	
@@ -294,7 +304,7 @@ function getJSFiles(dir, proj) {
 function getResults(ps) {
 
 	var categorized = [];
-	var uncategorized = [];
+	var uncategorized = []; // projects which have no labels
 	
 	for (let p of ps) {
 		var dom_score = p.labels.DOM;

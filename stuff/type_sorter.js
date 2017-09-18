@@ -218,27 +218,30 @@ function processResults(stats) {
  * gt_zero_aberrant: "
  * total: int
  */
-function printResults(zero_aberrant, gt_zero_aberrant, total) {
+function printResults(req_zero_aberrant, req_gt_zero_aberrant, total) {
 	var encoding = "utf-8";
-	var ratio = (zero_aberrant.length + gt_zero_aberrant.length) / total;
+	var ratio = (req_zero_aberrant.length + req_gt_zero_aberrant.length) / total;
+	var false_pos = req_gt_zero_aberrant.length / total;
+	var false_neg = req_zero_aberrant.length / total;
 	var filename = "aberration_report.txt";
 	
 	// Strings
-	var print_ratio = util.format('Percent aberrant projects:  %d', ratio);
+	var print_ratios = util.format('Percent aberrant projects:  %d\nPercent false positives (NJS > 0 && requires == 0):  %d\nPercent false negatives (NJS == 0 && requires > 0):  %d\n\n', ratio, false_neg, false_pos);
 
-	console.log(print_ratio.concat("\n"));
+
+	console.log(print_ratios);
 	
 	// make file, print ratio
-	writeFileSync(filename, print_ratio, encoding);
+	writeFileSync(filename, print_ratios, encoding);
 
 	// print info for files where njs & reqs have bad values
 	appendFileSync(filename, "\n\nFiles where (NJS == 0) && (reqs > 0)\n\n");
-	for (let proj of zero_aberrant) {
+	for (let proj of req_zero_aberrant) {
 		var line = getline(proj);
 		appendFileSync(filename, line);	
 	}
 	appendFileSync(filename, "\n\n\nFiles where (NJS > 0) && (reqs == 0)\n\n");
-	for (let proj of gt_zero_aberrant) {
+	for (let proj of req_gt_zero_aberrant) {
 		var line = getline(proj);
 		appendFileSync(filename, line);
 	}

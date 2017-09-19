@@ -394,7 +394,7 @@ function tallyRequireStmts(js_files) {
 		var f = tup[0];
 		var pkg = tup[1];
 		var file_text = readFileSync(f, "utf8");
-		var patt = /require\(['"]([^)]+)['"]\)/gm;
+		var patt = /require\([\s*'"]([^)]+)[\s*'"]\)/gm;
 		var path;
 		while ((path = patt.exec(file_text)) !== null) {
 			var pname = path[1];

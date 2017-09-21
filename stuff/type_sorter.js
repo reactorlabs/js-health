@@ -245,12 +245,12 @@ function printResults(req_zero_aberrant, req_gt_zero_aberrant, total, no_labels)
 	writeFileSync(filename, print_ratios, encoding);
 
 	// print info for files where njs & reqs have bad values
-	appendFileSync(filename, "\n\nFiles where (NJS == 0) && (reqs > 0)\n\n");
+	appendFileSync(filename, "\n\nFiles where (NJS > 0) && (reqs == 0)\n\n");
 	for (let proj of req_zero_aberrant) {
 		var line = getline(proj);
 		appendFileSync(filename, line);	
 	}
-	appendFileSync(filename, "\n\n\nFiles where (NJS > 0) && (reqs == 0)\n\n");
+	appendFileSync(filename, "\n\n\nFiles where (NJS == 0) && (reqs > 0)\n\n");
 	for (let proj of req_gt_zero_aberrant) {
 		var line = getline(proj);
 		appendFileSync(filename, line);
@@ -259,11 +259,11 @@ function printResults(req_zero_aberrant, req_gt_zero_aberrant, total, no_labels)
 	function getline(p) {
 		// url, path, njs
 		var keys = Object.keys(p[3]);
-		var info = util.format('%s\n    %s\n    NJS: %d     Require stmts: %d\n', p[0], p[1], p[2], keys.length);
+		var info = util.format('%s\n    %s\n    NJS: %d     Unique require stmts: %d\n', p[0], p[1], p[2], keys.length);
 		var reqs = "";
 		for (let r of keys) {
 			var reqline = util.format('      %s\n', r);
-			reqs.concat(reqline);
+			reqs = reqs.concat(reqline);
 		}
 		return info.concat(reqs);
 	};
@@ -343,6 +343,14 @@ function labelProject(p) {
 			}
 		}
 
+	}
+	for (let e in p.engines) {
+		if (e === "node") {
+			p.labels["NJS"] = p.labels["NJS"] + 1;
+		}
+		else {
+			// pass
+		}
 	}
 };
 

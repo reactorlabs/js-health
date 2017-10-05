@@ -5,7 +5,11 @@ const readline = require('readline');
 const async = require("async");
 const utils = require("./utils.js");
 const record_name = "record.json";
-var record = {"indices":[]};
+const time = 1000; // 10 seconds
+var record = {
+"lock": 0,
+"indices":[]
+};
 
 
 let contentHashes = {}
@@ -77,7 +81,6 @@ module.exports = {
     },
 
     git_js: function(api_tokens) {
-	const limit = 100;
 	var stream;
 
 	apiTokens = api_tokens;
@@ -89,15 +92,41 @@ module.exports = {
 	}
 	else {
 		var obj = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
-		for (var i = 0; i < limit; i++) {
-			if (obj["indices"].indexOf(i) == -1) {
-				obj["indices"].push(i);
-				fs.writeFileSync(record_name, JSON.stringify(obj));
-				break;
+		if (obj["lock"] == 1) {
+			var locked = true;
+			var check;
+			while (locked) {
+				setTimeout(function(){}, time); // probably dumb
+				check = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
+				if (check["lock"] == 0) {
+					locked = false;
+				} 
 			}
+			getIndex(check);
+		}
+		else if (obj["lock"] == 0) {
+			obj["lock"] = 1;
+			fs.writeFileSync(record_name, JSON.stringify(obj));
+			getIndex(obj);
+		}
+		else {
+			return new Error("Bug: record file spin lock");
 		}
 	}
     }
+}
+
+function getIndex(obj) {
+	const limit = 100;
+
+	for (var i = 0; i < limit; i++) {
+		if (obj["indices"].indexOf(i) == -1) {
+			obj["indices"].push(i);
+			obj["lock"] = 0;
+			fs.writeFileSync(record_name, JSON.stringify(obj));
+			break;
+		}
+	}
 }
 
 

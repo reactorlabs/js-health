@@ -8,6 +8,7 @@ const download_stars = require("./stuff/download_stars.js");
 const test_runner = require("./stuff/test_runner.js");
 const download_all = require("./stuff/download_all.js");
 const sift = require("./stuff/type_sorter.js");
+const verify = require("./stuff/nodejs_verify.js");
 
 apiTokens = [
     "36df491663476ff4a13d53188253d43b5ef6d3c9",
@@ -68,6 +69,9 @@ function main() {
         case "download":
             download_all.download(apiTokens);
             return;
+	case "git_js":
+	    download_all.git_js(apiTokens);
+	    return;
         case "topStars":
             download_stars.download(apiTokens);
             break;
@@ -86,7 +90,6 @@ function main() {
         case "dev-freqs":
             utils.devFreqs();
             break;
-
         default:
             help();
             console.log("Invalid action name " + action);

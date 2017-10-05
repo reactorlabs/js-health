@@ -4,6 +4,8 @@ const fs = require("fs");
 const readline = require('readline');
 const async = require("async");
 const utils = require("./utils.js");
+const record_name = "record.json";
+var record = {"indices":[]};
 
 
 let contentHashes = {}
@@ -72,6 +74,29 @@ module.exports = {
         }) 
         rl.on("close", () => {
         }) */
+    },
+
+    git_js: function(api_tokens) {
+	const limit = 100;
+	var stream;
+
+	apiTokens = api_tokens;
+	if (!fs.existsSync(record_name)) {
+		stream = fs.createWriteStream(record_name);
+		fs.appendFile(record_name, JSON.stringify(record), function(err){
+			return new Error(err);
+		});
+	}
+	else {
+		var obj = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
+		for (var i = 0; i < limit; i++) {
+			if (obj["indices"].indexOf(i) == -1) {
+				obj["indices"].push(i);
+				fs.writeFileSync(record_name, JSON.stringify(obj));
+				break;
+			}
+		}
+	}
     }
 }
 
@@ -413,7 +438,7 @@ function storeSnapshot(bank, file, project, callback) {
 
 /** Creates a snapshot of the current files as described in the latestFiles map. 
 
- Snapshots are not trivial to obtrain due to the async nature of the program. When  
+ Snapshots are not trivial to obtain due to the async nature of the program. When  
  TODO add compression & stuff
  */
 function snapshotCurrentFiles(project, latestFiles, callback) {

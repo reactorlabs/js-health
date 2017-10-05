@@ -80,13 +80,14 @@ module.exports = {
         }) */
     },
 
-    git_js: function(api_tokens) {
+    git_js: function() {
 	var stream;
 
-	apiTokens = api_tokens;
+	//apiTokens = api_tokens;
 	if (!fs.existsSync(record_name)) {
 		stream = fs.createWriteStream(record_name);
-		fs.appendFile(record_name, JSON.stringify(record), function(err){
+		var new_obj = getIndex(record);
+		fs.appendFile(record_name, JSON.stringify(new_obj), function(err){
 			return new Error(err);
 		});
 	}
@@ -99,15 +100,17 @@ module.exports = {
 				setTimeout(function(){}, time); // probably dumb
 				check = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
 				if (check["lock"] == 0) {
+					setLock(check);
 					locked = false;
 				} 
 			}
-			getIndex(check);
+			var new_obj = getIndex(check);
+			unsetLock(new_obj);
 		}
 		else if (obj["lock"] == 0) {
-			obj["lock"] = 1;
-			fs.writeFileSync(record_name, JSON.stringify(obj));
-			getIndex(obj);
+			setLock(obj);
+			var new_obj = getIndex(obj);
+			unsetLock(new_obj);
 		}
 		else {
 			return new Error("Bug: record file spin lock");
@@ -122,11 +125,20 @@ function getIndex(obj) {
 	for (var i = 0; i < limit; i++) {
 		if (obj["indices"].indexOf(i) == -1) {
 			obj["indices"].push(i);
-			obj["lock"] = 0;
-			fs.writeFileSync(record_name, JSON.stringify(obj));
 			break;
 		}
 	}
+	return obj;
+}
+
+function setLock(obj) {
+	obj["lock"] = 1;
+	fs.writeFileSync(record_name, JSON.stringify(obj));
+}
+
+function unsetLock(obj) {
+	obj["lock"] = 0;
+	fs.writeFileSync(record_name, JSON.stringify(obj));
 }
 
 

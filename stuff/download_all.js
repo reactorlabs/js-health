@@ -7,8 +7,8 @@ const utils = require("./utils.js");
 const record_name = "record.json";
 const time = 1000; // 10 seconds
 var record = {
-"lock": 0,
-"indices":[]
+  "lock": 0,
+  "indices":[]
 };
 
 
@@ -81,18 +81,24 @@ module.exports = {
     },
 
     git_js: function() {
+	if (process.argv.length != 4) {
+		module.exports.help();
+		console.log("Usage: node index.js git_js <filename>");
+	}
 	var stream;
-
+	var filename = process.argv[3];
 	//apiTokens = api_tokens;
 	if (!fs.existsSync(record_name)) {
 		stream = fs.createWriteStream(record_name);
-		var new_obj = getIndex(record);
-		fs.appendFile(record_name, JSON.stringify(new_obj), function(err){
-			return new Error(err);
-		});
+		var vals = getIndex(record);
+		downloadAtIndex(vals[1], filename);
+		console.log(vals[0]);
+		fs.writeFileSync(record_name, JSON.stringify(vals[0]));
 	}
 	else {
 		var obj = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
+		var vals;
+		var new_obj;
 		if (obj["lock"] == 1) {
 			var locked = true;
 			var check;
@@ -104,39 +110,52 @@ module.exports = {
 					locked = false;
 				} 
 			}
-			var new_obj = getIndex(check);
-			unsetLock(new_obj);
+			vals = getIndex(check);
 		}
 		else if (obj["lock"] == 0) {
 			setLock(obj);
-			var new_obj = getIndex(obj);
-			unsetLock(new_obj);
+			vals = getIndex(obj);
 		}
 		else {
 			return new Error("Bug: record file spin lock");
 		}
+		console.log("reached");
+		new_obj = vals[0];
+		console.log(new_obj);
+		unsetLock(new_obj);
+		downloadAtIndex(vals[1], filename);
 	}
     }
 }
 
 function getIndex(obj) {
-	const limit = 100;
+	const limit = 1000;
+
+	var index;
 
 	for (var i = 0; i < limit; i++) {
 		if (obj["indices"].indexOf(i) == -1) {
-			obj["indices"].push(i);
+			obj.indices.push(i);
+			index = i;
 			break;
 		}
 	}
-	return obj;
+	return [obj, index];
+}
+
+function downloadAtIndex(i, csvfilename) {
+	// TODO: calculate size of steps... perhaps max(10, lines/1000)
+	console.log(i.toString().concat("\n"));
 }
 
 function setLock(obj) {
+	console.log(obj);
 	obj["lock"] = 1;
 	fs.writeFileSync(record_name, JSON.stringify(obj));
 }
 
 function unsetLock(obj) {
+	console.log("unset");
 	obj["lock"] = 0;
 	fs.writeFileSync(record_name, JSON.stringify(obj));
 }

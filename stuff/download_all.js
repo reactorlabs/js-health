@@ -81,17 +81,18 @@ module.exports = {
     },
 
     git_js: function() {
-	if (process.argv.length != 4) {
-		module.exports.help();
-		console.log("Usage: node index.js git_js <filename>");
+	if (process.argv.length != 5) {
+		console.log("Usage: node index.js git_js <filename> <lines-in-file>");
+		process.exit(-1);
 	}
-	var stream;
 	var filename = process.argv[3];
+	var limit = parseInt(process.argv[4]); // via "wc -l <file>" ... Probably not the best solution.
+	var stream;
 	//apiTokens = api_tokens;
 	if (!fs.existsSync(record_name)) {
 		stream = fs.createWriteStream(record_name);
-		var vals = getIndex(record);
-		downloadAtIndex(vals[1], filename);
+		var vals = getIndex(record, limit);
+		downloadAtIndex(vals[1], filename, limit);
 		console.log(vals[0]);
 		fs.writeFileSync(record_name, JSON.stringify(vals[0]));
 	}
@@ -99,37 +100,43 @@ module.exports = {
 		var obj = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
 		var vals;
 		var new_obj;
-		if (obj["lock"] == 1) {
-			var locked = true;
-			var check;
-			while (locked) {
-				setTimeout(function(){}, time); // probably dumb
-				check = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
-				if (check["lock"] == 0) {
-					setLock(check);
-					locked = false;
-				} 
-			}
-			vals = getIndex(check);
-		}
-		else if (obj["lock"] == 0) {
-			setLock(obj);
-			vals = getIndex(obj);
-		}
-		else {
-			return new Error("Bug: record file spin lock");
-		}
-		console.log("reached");
+		vals = lock(obj, limit);
 		new_obj = vals[0];
 		console.log(new_obj);
 		unsetLock(new_obj);
-		downloadAtIndex(vals[1], filename);
+		console.log("VALS: ".concat(vals));
+		downloadAtIndex(vals[1], filename, limit);
 	}
     }
 }
 
-function getIndex(obj) {
-	const limit = 1000;
+function lock(obj, limit) {
+	var vals;
+	if (obj["lock"] == 1) {
+		var locked = true;
+		var check;
+		while (locked) {
+			setTimeout(function(){}, time); // probably dumb
+			check = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
+			if (check["lock"] == 0) {
+				setLock(check);
+				locked = false;
+			} 
+		}
+		vals = getIndex(check, limit);
+	}
+	else if (obj["lock"] == 0) {
+		setLock(obj);
+		vals = getIndex(obj, limit);
+	}
+	else {
+		return new Error("Bug: record file spin lock");
+	}
+	return vals;
+}
+
+function getIndex(obj, lines) {
+	limit = lines;
 
 	var index;
 
@@ -143,9 +150,13 @@ function getIndex(obj) {
 	return [obj, index];
 }
 
-function downloadAtIndex(i, csvfilename) {
+function downloadAtIndex(i, csvfilename, limit) {
+	var step = Math.max(10, Math.round(limit / 1000));
+	console.log("STEP: ".concat(step));
+	for (var n = i; n < limit; n = n + step) {
+		console.log(n);
+	}
 	// TODO: calculate size of steps... perhaps max(10, lines/1000)
-	console.log(i.toString().concat("\n"));
 }
 
 function setLock(obj) {
@@ -155,7 +166,6 @@ function setLock(obj) {
 }
 
 function unsetLock(obj) {
-	console.log("unset");
 	obj["lock"] = 0;
 	fs.writeFileSync(record_name, JSON.stringify(obj));
 }

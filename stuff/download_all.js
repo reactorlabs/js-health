@@ -11,7 +11,6 @@ var record = {
   "indices":[]
 };
 
-
 let contentHashes = {}
 let contentHashId = 1
 
@@ -80,14 +79,17 @@ module.exports = {
         }) */
     },
 
-    git_js: function() {
+    git_js: function(api_tokens) {
 	if (process.argv.length != 5) {
 		console.log("Usage: node index.js git_js <filename> <lines-in-file>");
 		process.exit(-1);
 	}
+	apiTokens = api_tokens;
+
 	var filename = process.argv[3];
 	var limit = parseInt(process.argv[4]); // via "wc -l <file>" ... Probably not the best solution.
 	var stream;
+
 	//apiTokens = api_tokens;
 	if (!fs.existsSync(record_name)) {
 		stream = fs.createWriteStream(record_name);
@@ -153,10 +155,57 @@ function getIndex(obj, lines) {
 function downloadAtIndex(i, csvfilename, limit) {
 	var step = Math.max(10, Math.round(limit / 1000));
 	console.log("STEP: ".concat(step));
+	outDir = i;
+	tmpDir = outDir + "/tmp";
+	utils.mkdir(outDir);
+	utils.mkdir(tmpDir);
+	let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
+	let batch = [];
+
 	for (var n = i; n < limit; n = n + step) {
 		console.log(n);
+		let p = projects[n].split(",");
+		batch.push({ name : p[0], lang : p[1], fork : p[2], index: n });
 	}
-	// TODO: calculate size of steps... perhaps max(10, lines/1000)
+
+	let queue = async.queue(processGitProject, 1); // I know this is terrible
+	queue.drain = () => {
+		console.log("Job's done!");
+		process.exit();
+	}
+	queue.push(batch);
+	console.log(batch);
+	console.log(batch[0]);
+}
+
+function processGitProject(project, callback, directory) {
+	console.log("processGitProject... replace with LOG?");
+	LOG(project, "processing JS project " + project.name);
+	async.waterfall([
+		(callback) => {
+			child_process.exec("mkdir -p " + project.folder, (error, cout, cerr) => {
+				if (error)
+					callback(error, project);
+				else
+					callback(null, project);
+			});
+		},
+		downloadProject,
+		getCommits,
+		analyzeCommits,
+		loadMetadata,
+		storeProjectInfo
+	], (error, project) => {
+		if (error)
+			ERROR(project, error);
+		closeProject(project, callback);
+	})
+}
+
+function skipSnapshot(project, latestFiles, callback) {
+// Because I don't 100% grok the callback waterfall thing ^_^
+	LOG("Reached summy function skipSnapshot :-D");
+	queue.push(latestFiles);
 }
 
 function setLock(obj) {
@@ -252,6 +301,7 @@ function processProject(project, callback) {
 function downloadProject(project, callback) {
     project.url =  "https://github.com/" + project.name;
     project.path = tmpDir + "/" + project.index;
+    console.log(project.name); // TODO remove
     LOG(project, "downloading into " + project.path + "...");
 //    callback(null, project);
     child_process.exec("git clone " + project.url + " " + project.path,

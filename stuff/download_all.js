@@ -179,11 +179,16 @@ function downloadAtIndex(i, csvfilename, limit) {
 }
 
 function processGitProject(project, callback, directory) {
+	console.log("PROJECT");
+	console.log(project);
 	console.log("processGitProject... replace with LOG?");
 	LOG(project, "processing JS project " + project.name);
+	project.outDir = outDir + "/projects" + getSubdirForId(project.index, "projects");
+	console.log("OUTDIR");
+	console.log(project.outDir);
 	async.waterfall([
 		(callback) => {
-			child_process.exec("mkdir -p " + project.folder, (error, cout, cerr) => {
+			child_process.exec("mkdir -p " + project.outDir, (error, cout, cerr) => {
 				if (error)
 					callback(error, project);
 				else
@@ -193,6 +198,7 @@ function processGitProject(project, callback, directory) {
 		downloadProject,
 		getCommits,
 		analyzeCommits,
+		skipSnapshot,
 		loadMetadata,
 		storeProjectInfo
 	], (error, project) => {
@@ -204,7 +210,15 @@ function processGitProject(project, callback, directory) {
 
 function skipSnapshot(project, latestFiles, callback) {
 // Because I don't 100% grok the callback waterfall thing ^_^
-	LOG("Reached summy function skipSnapshot :-D");
+	LOG("Reached dummy function skipSnapshot");
+	let snapshots = [];
+	let queue = async.queue((file, callback) => {
+		console.log("skip snapshot queue");
+		callback(null, project);
+	}, 1);
+	queue.drain = () => {
+		callback(null, project);
+	}
 	queue.push(latestFiles);
 }
 
@@ -604,6 +618,7 @@ let apiTokenIndex_ = 0;
 
 
 function loadMetadata(project, callback) {
+	console.log("METADATA: ".concat(callback)); //TODO remove
     if (apiTokens.length == 0) {
         callback(null, project);
     } else {

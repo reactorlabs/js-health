@@ -93,6 +93,7 @@ module.exports = {
     analyzeProjectDependencies: function(p) {
 	p.dependencies = {};
 	p.devDependencies = {};
+	p.engines = {};
         if (p.npm) {
             try {
                 let pjson = JSON.parse(fs.readFileSync(p.path + "/package.json", {encoding: "utf8"}));
@@ -101,6 +102,9 @@ module.exports = {
                 }
 		if (pjson.devDependencies !== undefined) {
 			p.devDependencies = pjson.devDependencies;
+		}
+		if (pjson.engines != undefined) {
+			p.engines = pjson.engines;
 		}
             } catch (e) {
                 // pass

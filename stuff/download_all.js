@@ -6,10 +6,8 @@ const async = require("async");
 const utils = require("./utils.js");
 const record_name = "record.json";
 const time = 1000; // 10 seconds
-var record = {
-  "lock": 0,
-  "indices":[]
-};
+
+var git_js_bool = false;
 
 let contentHashes = {}
 let contentHashId = 1
@@ -80,159 +78,42 @@ module.exports = {
     },
 
     git_js: function(api_tokens) {
-	if (process.argv.length != 5) {
-		console.log("Usage: node index.js git_js <filename> <lines-in-file>");
+	git_js_bool = true;
+	if (process.argv.length != 6) {
+		console.log("Usage: node index.js git_js <file> <step> <index>");
 		process.exit(-1);
 	}
 	apiTokens = api_tokens;
 
 	var filename = process.argv[3];
-	var limit = parseInt(process.argv[4]); // via "wc -l <file>" ... Probably not the best solution.
+	var step = parseInt(process.argv[4]); 	
+	var index = parseInt(process.argv[5]);
 	var stream;
 
-	//apiTokens = api_tokens;
-	if (!fs.existsSync(record_name)) {
-		stream = fs.createWriteStream(record_name);
-		var vals = getIndex(record, limit);
-		downloadAtIndex(vals[1], filename, limit);
-		console.log(vals[0]);
-		fs.writeFileSync(record_name, JSON.stringify(vals[0]));
-	}
-	else {
-		var obj = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
-		var vals;
-		var new_obj;
-		vals = lock(obj, limit);
-		new_obj = vals[0];
-		console.log(new_obj);
-		unsetLock(new_obj);
-		console.log("VALS: ".concat(vals));
-		downloadAtIndex(vals[1], filename, limit);
-	}
+	downloadAtIndex(index, filename, step);
     }
 }
 
-function lock(obj, limit) {
-	var vals;
-	if (obj["lock"] == 1) {
-		var locked = true;
-		var check;
-		while (locked) {
-			setTimeout(function(){}, time); // probably dumb
-			check = JSON.parse(fs.readFileSync(record_name, 'utf-8'));
-			if (check["lock"] == 0) {
-				setLock(check);
-				locked = false;
-			} 
-		}
-		vals = getIndex(check, limit);
-	}
-	else if (obj["lock"] == 0) {
-		setLock(obj);
-		vals = getIndex(obj, limit);
-	}
-	else {
-		return new Error("Bug: record file spin lock");
-	}
-	return vals;
-}
-
-function getIndex(obj, lines) {
-	limit = lines;
-
-	var index;
-
-	for (var i = 0; i < limit; i++) {
-		if (obj["indices"].indexOf(i) == -1) {
-			obj.indices.push(i);
-			index = i;
-			break;
-		}
-	}
-	return [obj, index];
-}
-
-function downloadAtIndex(i, csvfilename, limit) {
-	var step = Math.max(10, Math.round(limit / 1000));
-	console.log("STEP: ".concat(step));
-	outDir = i;
+function downloadAtIndex(i, csvfilename, step) {
+	//outDir = i.toString();
 	tmpDir = outDir + "/tmp";
-	utils.mkdir(outDir);
-	utils.mkdir(tmpDir);
 	let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
 	let batch = [];
 
-	for (var n = i; n < limit; n = n + step) {
-		console.log(n);
+	for (var n = i; n < projects.length; n = n + step) {
 		let p = projects[n].split(",");
-		batch.push({ name : p[0], lang : p[1], fork : p[2], index: n });
+		batch.push({ name : p[0], lang : p[1], fork : p[2], index: n, folder: i });
 	}
 
-	let queue = async.queue(processGitProject, 1); // I know this is terrible
+	let queue = async.queue(processProject, 1); // I know this is terrible
 	queue.drain = () => {
 		console.log("Job's done!");
 		process.exit();
 	}
+	//console.log(batch.length);
+	//console.log(batch);
 	queue.push(batch);
-	console.log(batch);
-	console.log(batch[0]);
 }
-
-function processGitProject(project, callback, directory) {
-	console.log("PROJECT");
-	console.log(project);
-	console.log("processGitProject... replace with LOG?");
-	LOG(project, "processing JS project " + project.name);
-	project.outDir = outDir + "/projects" + getSubdirForId(project.index, "projects");
-	console.log("OUTDIR");
-	console.log(project.outDir);
-	async.waterfall([
-		(callback) => {
-			child_process.exec("mkdir -p " + project.outDir, (error, cout, cerr) => {
-				if (error)
-					callback(error, project);
-				else
-					callback(null, project);
-			});
-		},
-		downloadProject,
-		getCommits,
-		analyzeCommits,
-		skipSnapshot,
-		loadMetadata,
-		storeProjectInfo
-	], (error, project) => {
-		if (error)
-			ERROR(project, error);
-		closeProject(project, callback);
-	})
-}
-
-function skipSnapshot(project, latestFiles, callback) {
-// Because I don't 100% grok the callback waterfall thing ^_^
-	LOG("Reached dummy function skipSnapshot");
-	let snapshots = [];
-	let queue = async.queue((file, callback) => {
-		console.log("skip snapshot queue");
-		callback(null, project);
-	}, 1);
-	queue.drain = () => {
-		callback(null, project);
-	}
-	queue.push(latestFiles);
-}
-
-function setLock(obj) {
-	console.log(obj);
-	obj["lock"] = 1;
-	fs.writeFileSync(record_name, JSON.stringify(obj));
-}
-
-function unsetLock(obj) {
-	obj["lock"] = 0;
-	fs.writeFileSync(record_name, JSON.stringify(obj));
-}
-
 
 /** We need to distinguish between */
 function historyHashToId(hash) {
@@ -315,7 +196,6 @@ function processProject(project, callback) {
 function downloadProject(project, callback) {
     project.url =  "https://github.com/" + project.name;
     project.path = tmpDir + "/" + project.index;
-    console.log(project.name); // TODO remove
     LOG(project, "downloading into " + project.path + "...");
 //    callback(null, project);
     child_process.exec("git clone " + project.url + " " + project.path,
@@ -584,6 +464,12 @@ function snapshotCurrentFiles(project, latestFiles, callback) {
         if (hash < 0)
             snapshots.push({ filename: filename, id: -hash });
     }
+
+    if (git_js_bool == true) {
+    	snapshotWithoutBank(project, latestFiles, callback, snapshots);
+    }
+    else { // so horrible
+
     LOG(project, snapshots.length + " files to snapshot...");
     // get a bank we store the files into
     let bank = Bank.GetAvailable();
@@ -612,6 +498,37 @@ function snapshotCurrentFiles(project, latestFiles, callback) {
     }
     // schedule all the snapshots we have to be processed
     queue.push(snapshots);
+    }
+}
+
+/** Creates a snapshot of the current files as described in the latestFiles map. 
+
+ Snapshots are not trivial to obtain due to the async nature of the program. When  
+ TODO add compression & stuff
+ */
+function snapshotWithoutBank(project, latestFiles, callback, snapshots) {
+
+    let queue = async.queue((file, callback) => {
+	   
+	var snapshot_dir = project.folder.toString().concat("/" + project.index.toString()).concat("/snapshots");
+	child_process.exec("mkdir -p " + snapshot_dir, (error, cout, cerr) => {
+		if (error) {
+			ERROR(project, "Unable to create snapshot path " + project.name);
+			callback();
+		}
+		
+	});
+    	//console.log("FILE: ".concat(file));
+	child_process.exec("cp \"" + project.path + "/" + file.filename + "\" " + snapshot_dir, (error, cout, cerr) => {
+		if (error) ERROR(project, "Unable to store snapshot " + error, " error: " + error);
+	})
+	callback(null, project);
+    }, 1);
+    queue.drain = () => {
+    	callback(null, project);
+    }
+    queue.push(snapshots);
+	// TODO here
 }
 
 let apiTokenIndex_ = 0;
@@ -660,8 +577,8 @@ function closeProject(project, callback) {
     // we are done with processing the project
     LOG(project, "DONE");
     // TODO change this, but for now only download the first 10 projects
-    if (project.index < 10)
-        callback();
+    //if (project.index < 10)
+    callback();
     return;
 /*
     child_process.exec("rm -rf " + project.path, () => {

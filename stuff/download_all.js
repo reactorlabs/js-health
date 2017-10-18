@@ -5,6 +5,7 @@ const readline = require('readline');
 const async = require("async");
 const utils = require("./utils.js");
 
+let apiTokenIndex_ = 0;
 let contentHashes = {}
 let contentHashId = 1
 
@@ -178,7 +179,6 @@ function getCommits(project, callback) {
     );
 }
 
-
 function isValidFilename(filename) {
     if (filename.includes("node_modules"))
         return null; // denied file
@@ -188,7 +188,6 @@ function isValidFilename(filename) {
         return true;
     return false;
 }
-
 
 /** Analyzes the commits one by one */
 function analyzeCommits(project, commits, callback) {
@@ -263,7 +262,7 @@ function analyzeCommits(project, commits, callback) {
     }
 }
 
-/** Return id if hash found, -id if hash not found */
+/** Return id if hash found, store id & return -id if hash not found */
 function historyHashToId(hash) {
     let result = contentHashes[hash];
     if (result === undefined) {
@@ -289,21 +288,6 @@ function getSubdirForId(id, prefix) {
     return result;
 }
 
-function LOG(project, message) {
-    console.log(project.index + ": " + message);
-}
-
-function ERROR(project, error) {
-    project.error = error
-    console.log(project.index+" ERROR: " + error);
-}
-
-let snapshotChunk = 0;
-let snapshotIndex = 0;
-
-let bankIndex_ = 0;
-let freeBanks_ = [];
-
 /** stores snapshots into files 
 
  Snapshots are not trivial to obtain due to the async nature of the program. When  
@@ -327,8 +311,6 @@ function snapshotFiles(project, snapshots, callback) {
        		callback(null, project);
 	};
 }
-
-let apiTokenIndex_ = 0;
 
 function loadMetadata(project, callback) {
     if (apiTokens.length == 0) {
@@ -361,13 +343,10 @@ function storeProjectInfo(project, callback) {
     });
 }
 
-
-
 /** Deletes the project from disk. 
  */
 function closeProject(project, callback) {
     LOG(project, "deleting...");
-
 
     // we are done with processing the project
     LOG(project, "DONE");
@@ -385,7 +364,11 @@ function closeProject(project, callback) {
     }); */
 }
 
+function LOG(project, message) {
+    console.log(project.index + ": " + message);
+}
 
-
-
-
+function ERROR(project, error) {
+    project.error = error
+    console.log(project.index+" ERROR: " + error);
+}

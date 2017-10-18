@@ -311,62 +311,6 @@ let snapshotIndex = 0;
 
 let bankIndex_ = 0;
 let freeBanks_ = [];
-/**
-class Bank {
-
-    static GetAvailable() {
-        if (freeBanks_.length === 0) {
-            return new Bank();
-        } else {
-            let result = freeBanks_[0];
-            freeBanks_.splice(0, 1);
-            return result;
-        }
-    }
-
-    constructor() {
-        this.index = bankIndex_++;
-        this.ready = false;
-        this.remaining = maxFiles;
-        this.pending = 0;
-        this.path = tmpDir+"/bank-" + this.index;
-        this.archivename = this.index + " tar.xz";
-    }
-
-    release() {
-        if (this.remaining > 0)
-            freeBanks_.push(this);
-    }
-
-    compress(callback) {
-        child_process.exec("tar cfJ " + this.archiveName + " *", {
-                cwd: this.path, 
-                maxBuffer: 1024 * 1024 * 20, // 20mb should be enough
-        }, 
-        (error, cout, cerr) => {
-            callback(error);
-        });
-    }
-
-    copyResults(callback) {
-        let dest = outDir + "/files/" + this.archiveName;
-        child_process.exec("cp " + this.archiveName + " " + dest, {
-            cwd: this.path,
-        }, (error, cout, cerr) => {
-            callback(error);
-        })
-    }
-
-    erase(callback) {
-        child_process.exec("rm -rf " + this.path, (error, cout, cerr) => {
-            callback(error);
-        });
-    }
-
-}
-*/
-
-
 
 /** stores snapshots into files 
 

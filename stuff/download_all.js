@@ -54,33 +54,18 @@ module.exports = {
         console.time("all");
         let index = 0
         let queue = async.queue(processProject, 1);
+        queue.push({ name : projects[0], index : 0} );
         queue.drain = () => {
             console.timeEnd("all");
             console.log("KTHXBYE");
             process.exit();
         }
-        queue.push({ name : projects[0], index : 0} );
-/*        const rl = readline.createInterface({
-            input: fs.createReadStream(filename),
-            console: false,
-        });
-        rl.on("line", (line) => {
-            if (index < 10)
-                queue.push({ 
-                    name: line, 
-                    index: index++
-                });
-            if (index == 10)
-                rl.close()
-        }) 
-        rl.on("close", () => {
-        }) */
     },
 
     git_js: function(api_tokens) {
 	git_js_bool = true;
-	if (process.argv.length != 6) {
-		console.log("Usage: node index.js git_js <file> <step> <index>");
+	if (process.argv.length != 7) {
+		console.log("Usage: node index.js git_js <file> <step> <index> <outDir>");
 		process.exit(-1);
 	}
 	apiTokens = api_tokens;
@@ -88,17 +73,20 @@ module.exports = {
 	var filename = process.argv[3];
 	var step = parseInt(process.argv[4]); 	
 	var index = parseInt(process.argv[5]);
+	var outputDir = process.argv[6];
 	var stream;
 
-	downloadAtIndex(index, filename, step);
+	downloadAtIndex(index, filename, step, outputDir);
     }
 }
 
-function downloadAtIndex(i, csvfilename, step) {
-	outDir = i;
+function downloadAtIndex(i, csvfilename, step, outputDir) {
+	outDir = outputDir + "/" + i;
 	tmpDir = outDir + "/tmp";
 	let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
 	let batch = [];
+	console.log(outDir + "/snapshots");
+	utils.mkdir(outDir + "/snapshots", "-p");
 
 	for (var n = i; n < projects.length; n = n + step) {
 		let p = projects[n].split(",");
@@ -119,10 +107,8 @@ function downloadAtIndex(i, csvfilename, step) {
 function historyHashToId(hash) {
     let result = contentHashes[hash];
     if (result === undefined) {
-        contentHashes[hash] = -contentHashId;
-        return contentHashId++;
-    } else if (result < 0) {
-        return -result;
+        contentHashes[hash] = contentHashId;
+        return -contentHashId++;
     } else {
         return result;
     }
@@ -179,7 +165,7 @@ function processProject(project, callback) {
         downloadProject,
         getCommits,
         analyzeCommits,
-        snapshotCurrentFiles,
+        snapshotFiles,
         loadMetadata,
         storeProjectInfo, 
     ], (error, project) => {
@@ -253,6 +239,7 @@ function isValidFilename(filename) {
 
 /** Analyzes the commits one by one */
 function analyzeCommits(project, commits, callback) {
+    let newsnapshots = [];
     LOG(project, "analyzing commits...");
     // files as of the latest commit so that the commit additions & deletions can be reconstructed
     let latestFiles = {}
@@ -279,7 +266,8 @@ function analyzeCommits(project, commits, callback) {
                         line = line[0].split(" ");
                         if (line.length !== 3)
                             continue;
-                        currentFiles[filename] = line[2];
+			let hash = line[2];
+                        currentFiles[filename] = hash;
                     }
                 }
                 // now compare this to the latest files, first lets detect any deleted files, i.e. files in latest that are not in current
@@ -297,7 +285,14 @@ function analyzeCommits(project, commits, callback) {
                             x = [];
                             project.files[filename] = x;
                         }
-                        x.push({ hash: historyHashToId(currentFiles[filename]), time: commit.time });
+			let hash = currentFiles[filename];
+			let id = historyHashToId(hash);
+			 
+			if (id < 0) {
+				id = -id;
+				newsnapshots.push({id : id, hash : hash});
+			}
+                        x.push({ hash: id, time: commit.time });
                     }
                 }
                 // our latest files are now the current files
@@ -311,7 +306,7 @@ function analyzeCommits(project, commits, callback) {
     queue.push(commits.reverse());
     queue.drain = () => {
         // we have now checked all histories all files, let's do snapshots of the latest files where we need them
-        callback(null, project, latestFiles);
+        callback(null, project, newsnapshots);
     }
 }
 
@@ -405,6 +400,7 @@ class Bank {
 
 }
 
+/**
 function storeSnapshot(bank, file, project, callback) {
 	rt
     let src = project.path + "/" + file.filename;
@@ -451,114 +447,34 @@ function storeSnapshot(bank, file, project, callback) {
         return bank;
     }
 }
-
-
-/** Creates a snapshot of the current files as described in the latestFiles map. 
-
- Snapshots are not trivial to obtain due to the async nature of the program. When  
- TODO add compression & stuff
- */
-function snapshotCurrentFiles(project, latestFiles, callback) {
-    LOG(project, "creating snapshots of unique current project files " + Object.keys(latestFiles).length)
-    // first get list of snapshots we want to store
-    let snapshots = []
-    for (let filename in latestFiles) {
-        let hash = snapshotHashToId(latestFiles[filename]);
-        if (hash < 0)
-            snapshots.push({ filename: filename, id: -hash });
-    }
-
-    //if (git_js_bool == true) {
-    //	snapshotWithoutBank(project, latestFiles, callback, snapshots);
-    //}
-
-    	LOG(project, snapshots.length + " files to snapshot...");
-    // get a bank we store the files into
-    //let bank = Bank.GetAvailable();
-    //LOG(project, "writing into bank " + bank.index);
-    // create a queue that would process the file snapshots into the current bank
-    	var snapshot_dir = project.folder + "/snapshots";
-    	child_process.exec("mkdir -p " + snapshot_dir, (error, cout, cerr) => {
-    		if (error) {
-			ERROR(project, "Unable to create snapshot path " + project.name);
-			callback();
-		}
-    		let queue = async.queue((file, callback) => {
-			let src = project.path + "/" + file.filename;
-			let dest = snapshot_dir + "/" + file.id;
-			console.log("SRC: " + src);
-			console.log("DEST: " + dest);
-			child_process.exec("cp \"" + src + "\" " + dest, (error, cout, cerr) => {
-				if (error)
-					ERROR(project, "Unable to store snapshot " + cerr, " error: " + error);
-				callback(null, project);
-				// write archivename to file
-				// 
-			} );
-	
-    		}, 1);
-    		queue.drain = () => {
-        		callback(null, project);
-    		}
-		queue.push(snapshots);
-    	});
-
-	
-        //
-	//  if (!bank.ready) {
-        //    child_process.exec("mkdir -p " + bank.path, (error, cout, cerr) => {
-        //        if (error) {
-        //            ERROR(project, "Unable to create bank folder " + bank.path);
-        //            callback();
-        //        }
-        //        bank.ready = true;
-        //        bank = storeSnapshot(bank, file, project, callback);
-        //    })
-        //} else {
-        //    bank = storeSnapshot(bank, file, project, callback);
-        //}
-	
-        // release the bank so that others can use it
-        //LOG(project, "releasing bank " + bank.index + ", remaining: " + bank.remaining);
-        //bank.release();
-        //LOG(project, "snapshots created");
-    // schedule all the snapshots we have to be processed
-}
-
-/** Creates a snapshot of the current files as described in the latestFiles map. 
-
- Snapshots are not trivial to obtain due to the async nature of the program. When  
- TODO add compression & stuff
- */
-
-/**
-function snapshotWithoutBank(project, latestFiles, callback, snapshots) {
-
-    let queue = async.queue((file, callback) => {
-	   
-	var snapshot_dir = project.folder + "/snapshots";
-	child_process.exec("mkdir -p " + snapshot_dir, (error, cout, cerr) => {
-		if (error) {
-			ERROR(project, "Unable to create snapshot path " + project.name);
-			callback();
-		}
-		child_process.exec("cp \"" + project.path + "/" + file.filename + "\" " + snapshot_dir, (error, cout, cerr) => {
-			if (error) { ERROR(project, "Unable to store snapshot " + error, " error: " + error); }
-			callback(null, project);
-		});
-		
-	});
-    }, 1);
-    queue.drain = () => {
-    	callback(null, project);
-    }
-    queue.push(snapshots);
-	// TODO here
-}
 */
 
-let apiTokenIndex_ = 0;
 
+/** Creates a snapshot of the current files as described in the latestFiles map. 
+
+ Snapshots are not trivial to obtain due to the async nature of the program. When  
+ TODO add compression & stuff
+ */
+function snapshotFiles(project, snapshots, callback) {
+    let queue = async.queue((snapshot, callback) => {
+    	child_process.exec("git cat-file -p " + snapshot.hash + " > " + outDir + "/snapshots/" + snapshot.id, {
+		cwd: project.path,
+	}, (error, cout, cerr) => {
+			if (error) {
+				console.log(error);
+				ERROR(snapshot, "Unable to store snapshot " + snapshot.id);
+			}
+			callback();
+		} );
+	
+    	}, 1);
+	queue.push(snapshots);
+    	queue.drain = () => {
+       		callback(null, project);
+	};
+}
+
+let apiTokenIndex_ = 0;
 
 function loadMetadata(project, callback) {
     if (apiTokens.length == 0) {

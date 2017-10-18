@@ -243,7 +243,7 @@ function getCommits(project, callback) {
 function isValidFilename(filename) {
     if (filename.includes("node_modules"))
         return null; // denied file
-    if (filename.endsWith(".js"))
+    if (filename.endsWith(".js") || (filename.endsWith(".coffee") || (filename.endsWith(".litcoffee")) || (filename.endsWith(".ts"))))
         return true;
     if (filename === "package.json")
         return true;

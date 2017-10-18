@@ -4,14 +4,9 @@ const fs = require("fs");
 const readline = require('readline');
 const async = require("async");
 const utils = require("./utils.js");
-const record_name = "record.json";
-const time = 1000; // 10 seconds
-
-var git_js_bool = false;
 
 let contentHashes = {}
 let contentHashId = 1
-
 
 let outDir = null;;
 let tmpDir = null;;
@@ -63,7 +58,6 @@ module.exports = {
     },
 
     git_js: function(api_tokens) {
-	git_js_bool = true;
 	if (process.argv.length != 7) {
 		console.log("Usage: node index.js git_js <file> <step> <index> <outDir>");
 		process.exit(-1);

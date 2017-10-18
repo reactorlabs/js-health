@@ -98,8 +98,6 @@ function downloadAtIndex(i, csvfilename, step, outputDir) {
 		console.log("Job's done!");
 		process.exit();
 	}
-	//console.log(batch.length);
-	//console.log(batch);
 	queue.push(batch);
 }
 
@@ -181,11 +179,9 @@ function processProject(project, callback) {
  */
 function downloadProject(project, callback) {
     project.url =  "https://github.com/" + project.name;
-    project.path = tmpDir + "/" + project.index; // TODO CH screwed this up.
-    //project.path = outDir + "/" + project.index;
+    project.path = tmpDir + "/" + project.index;
     
-	LOG(project, "downloading into " + project.path + "...");
-//    callback(null, project);
+    LOG(project, "downloading into " + project.path + "...");
     child_process.exec("git clone " + project.url + " " + project.path,
         (error, cout, cerr) => {
             if (error) {
@@ -310,43 +306,12 @@ function analyzeCommits(project, commits, callback) {
     }
 }
 
-
-
-
-    /** Takes given id and produces a path from it that would make sure the MaxFilesPerDirectory limit is not broken assuming full utilization of the ids.
-    *
-    static std::string IdToPath(long id, std::string const & prefix = "") {
-        // when files per folder is disabled
-        if (FilesPerFolder == 0)
-            return "";
-        std::string result = "";
-        // get the directory id first, which chops the ids into chunks of MaxEntriesPerDirectorySize
-        long dirId = id / FilesPerFolder;
-        // construct the path while dirId != 0
-        while (dirId != 0) {
-            result = STR("/" << prefix << std::to_string(dirId % FilesPerFolder) << result);
-            dirId = dirId / FilesPerFolder;
-        }
-        return result;
-    } */
-
-
-
-
-/* Copying and compressing the file snapshots is not a trivial task in the async process  */
-
-
-
-
 let snapshotChunk = 0;
 let snapshotIndex = 0;
 
-
 let bankIndex_ = 0;
 let freeBanks_ = [];
-
-
-
+/**
 class Bank {
 
     static GetAvailable() {
@@ -399,58 +364,11 @@ class Bank {
     }
 
 }
-
-/**
-function storeSnapshot(bank, file, project, callback) {
-	rt
-    let src = project.path + "/" + file.filename;
-    let dest = bank.path + "/" + file.id;
-    --bank.remaining;
-    ++bank.pending;
-    // copy the file to the bank's folder
-    child_process.exec("cp \"" + src + "\" "+ dest, (error, cout, cerr) => {
-        if (error)
-            ERROR(project, "Unable to store snapshot " + desc, " error: " + error);
-        --bank.pending;
-        // if the bank has been filled and we are last 
-        if (bank.pending === 0 && bank.remaining === 0) {
-            // compress, copy, delete
-            async.waterfall([
-                (cb) => { 
-                    LOG(project, " compressing full bank " + bank.index);
-                    bank.compress(cb);
-                },
-                (cb) => { 
-                    LOG(project, "copying compressed bank " + bank.archiveName);
-                    bank.copyResults(cb); 
-                },
-                (cb) => { 
-                    LOG(project, "erasing bank " + bank.index);
-                    bank.erase(callback);
-                 }
-            ], (error) => {
-                if (error)
-                    ERROR(project, "An error occured when compressing & storing bank " + bank.index);
-                // we are done with the compression
-                callback();
-            });
-        } else {
-            callback();
-        }
-    });
-    // if we have used up the bank, return the next available, or new bank to the snapshot downloader
-    if (bank.remaining === 0) {
-        let newBank = Bank.GetAvailable();
-        LOG(project, "Changing to bank " + newBank.index);
-        return newBank;
-    } else {
-        return bank;
-    }
-}
 */
 
 
-/** Creates a snapshot of the current files as described in the latestFiles map. 
+
+/** stores snapshots into files 
 
  Snapshots are not trivial to obtain due to the async nature of the program. When  
  TODO add compression & stuff

@@ -59,7 +59,7 @@ module.exports = {
     },
 
     mkdir: function(path, extraArgs = "") {
-        child_process.execSync("mkdir " + path + " " + extraArgs);
+        child_process.execSync("mkdir " + extraArgs + " " + path);
     },
 
     rm: function(path, extraArgs = "") {

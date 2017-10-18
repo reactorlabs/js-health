@@ -57,6 +57,9 @@ module.exports = {
         }
     },
 
+    /**
+     * Download and process every n + i^th project in a CSV file
+     */
     git_js: function(api_tokens) {
 	if (process.argv.length != 7) {
 		console.log("Usage: node index.js git_js <file> <step> <index> <outDir>");
@@ -74,71 +77,31 @@ module.exports = {
     }
 }
 
+/**
+ * i: index
+ * step: every n^th file to copy
+ */
 function downloadAtIndex(i, csvfilename, step, outputDir) {
 	outDir = outputDir + "/" + i;
-	tmpDir = outDir + "/tmp";
+	tmpDir = outDir + "/tmp"; // temporary folder to download projects
 	let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
-	let batch = [];
-	console.log(outDir + "/snapshots");
+	let batch = []; // Files to process
 	utils.mkdir(outDir + "/snapshots", "-p");
 
+	// turn every n + i^th project into an object and store it
 	for (var n = i; n < projects.length; n = n + step) {
 		let p = projects[n].split(",");
 		batch.push({ name : p[0], lang : p[1], fork : p[2], index: n, folder: i });
 	}
 
-	let queue = async.queue(processProject, 1); // I know this is terrible
+	let threads = 1;
+	let queue = async.queue(processProject, threads);
 	queue.drain = () => {
 		console.log("Job's done!");
 		process.exit();
 	}
 	queue.push(batch);
 }
-
-/** We need to distinguish between */
-function historyHashToId(hash) {
-    let result = contentHashes[hash];
-    if (result === undefined) {
-        contentHashes[hash] = contentHashId;
-        return -contentHashId++;
-    } else {
-        return result;
-    }
-}
-
-/** ??? */
-function snapshotHashToId(hash) {
-    let result = contentHashes[hash];
-    if (result < 0)
-        contentHashes[hash] = -result;
-    return result;
-}
-
-/** Returns a path for the given snapshot id using the hierarchical scheme */
-function getSubdirForId(id, prefix) {
-    if (maxFiles === 0)
-        return "";
-    let result = "";
-    let min = 1;
-    let max = maxFiles;
-    let dirId = Math.floor(id / maxFiles);
-    while (dirId !== 0) {
-        result = result + "/" + prefix + "-" + (dirId % maxFiles);
-        dirId = Math.floor(dirId / maxFiles);
-    } 
-    return result;
-}
-
-function LOG(project, message) {
-    console.log(project.index + ": " + message);
-}
-
-function ERROR(project, error) {
-    project.error = error
-    console.log(project.index+" ERROR: " + error);
-}
-
-
 
 /** Processes the given project.
  */
@@ -298,6 +261,41 @@ function analyzeCommits(project, commits, callback) {
         // we have now checked all histories all files, let's do snapshots of the latest files where we need them
         callback(null, project, newsnapshots);
     }
+}
+
+/** Return id if hash found, -id if hash not found */
+function historyHashToId(hash) {
+    let result = contentHashes[hash];
+    if (result === undefined) {
+        contentHashes[hash] = contentHashId;
+        return -contentHashId++;
+    } else {
+        return result;
+    }
+}
+
+/** Returns a path for the given snapshot id using the hierarchical scheme */
+function getSubdirForId(id, prefix) {
+    if (maxFiles === 0)
+        return "";
+    let result = "";
+    let min = 1;
+    let max = maxFiles;
+    let dirId = Math.floor(id / maxFiles);
+    while (dirId !== 0) {
+        result = result + "/" + prefix + "-" + (dirId % maxFiles);
+        dirId = Math.floor(dirId / maxFiles);
+    } 
+    return result;
+}
+
+function LOG(project, message) {
+    console.log(project.index + ": " + message);
+}
+
+function ERROR(project, error) {
+    project.error = error
+    console.log(project.index+" ERROR: " + error);
 }
 
 let snapshotChunk = 0;

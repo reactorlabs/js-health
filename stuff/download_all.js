@@ -295,6 +295,7 @@ function getSubdirForId(id, prefix) {
  */
 function snapshotFiles(project, snapshots, callback) {
     let queue = async.queue((snapshot, callback) => {
+
     	child_process.exec("git cat-file -p " + snapshot.hash + " > " + outDir + "/snapshots/" + snapshot.id, {
 		cwd: project.path,
 	}, (error, cout, cerr) => {

@@ -63,7 +63,7 @@ module.exports = {
     },
 
     rm: function(path, extraArgs = "") {
-        child_process.execSync("rm " + path + " " + extraArgs);
+        child_process.execSync("rm " + extraArgs + " " + path);
     },
 
     listProjects: function(path, num) {

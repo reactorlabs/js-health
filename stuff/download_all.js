@@ -140,7 +140,7 @@ function downloadProject(project, callback) {
     project.path = tmpDir + "/" + project.index;
     
     LOG(project, "downloading into " + project.path + "...");
-    child_process.exec("git clone " + project.url + " " + project.path,
+    child_process.exec("GIT_TERMINAL_PROMPT=0 git clone " + project.url + " " + project.path,
         (error, cout, cerr) => {
             if (error) {
                 callback(error, project);

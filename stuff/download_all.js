@@ -109,18 +109,13 @@ function downloadAtIndex(i, csvfilename, step, outputDir) {
 function processProject(project, callback) {
     LOG(project, "started processing project " + project.name);
     project.outDir = outDir + "/projects/" + project.index + getSubdirForId(project.index, "projects");
-    let snapshotDir = outDir + "/snapshots/";
     async.waterfall([
         (callback) => { 
             child_process.exec("mkdir -p " + project.outDir, (error, cout, cerr) => {
                 if (error)
                     callback(error, project);
-		child_process.exec("mkdir -p " + snapshotDir, (error, cout, cerr) => {
-            		if (error)
-               			callback(error, project);
-            		           		//callback(null, project);
-        		});
-                callback(null, project);
+                else
+                    callback(null, project);
             });
         },
         downloadProject,

@@ -85,7 +85,6 @@ module.exports = {
 function downloadAtIndex(i, csvfilename, step, outputDir) {
 	outDir = outputDir + "/" + i;
 	tmpDir = outDir + "/tmp"; // temporary folder to download projects
-//	let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
 	let batch = []; // Files to process
 	utils.mkdir(outDir + "/snapshots", "-p");
 	var count = 0;	
@@ -119,15 +118,6 @@ function downloadAtIndex(i, csvfilename, step, outputDir) {
 		queue.push(batch);
 	
 	});
-
-/**
-	// turn every n + i^th project into an object and store it
-	var count = 0;
-	for (var n = i; n < projects.length; n = n + step) {
-		let p = projects[n].split(",");
-		batch.push({ name : p[0], lang : p[1], fork : p[2], index: n, folder: i });
-	}
-*/
 }
 
 /** Processes the given project.

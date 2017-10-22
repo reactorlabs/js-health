@@ -85,7 +85,7 @@ module.exports = {
 function downloadAtIndex(i, csvfilename, step, outputDir) {
 	outDir = outputDir + "/" + i;
 	tmpDir = outDir + "/tmp"; // temporary folder to download projects
-	//let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
+//	let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
 	let batch = []; // Files to process
 	utils.mkdir(outDir + "/snapshots", "-p");
 	var count = 0;	
@@ -103,11 +103,21 @@ function downloadAtIndex(i, csvfilename, step, outputDir) {
 		for (let line of chunk.split("\n")) {
 			if ((count - i) % step === 0) {
 				let p = line.split(",");
-				batch.push({ name : p[0], lang : p[1], fork : p[2], index : n, folder : i});
+				batch.push({ name : p[0], lang : p[1], fork : p[2], index : count, folder : i});
 			}
-			console.log(count);
 			count = count + 1;
 		}
+	});
+
+	readStream.on('end', () => {
+			let threads = 1;
+			let queue = async.queue(processProject, threads);
+			queue.drain = () => {
+			console.log("Job's done!");
+			process.exit();
+		}
+		queue.push(batch);
+	
 	});
 
 /**
@@ -118,13 +128,6 @@ function downloadAtIndex(i, csvfilename, step, outputDir) {
 		batch.push({ name : p[0], lang : p[1], fork : p[2], index: n, folder: i });
 	}
 */
-	let threads = 1;
-	let queue = async.queue(processProject, threads);
-	queue.drain = () => {
-		console.log("Job's done!");
-		process.exit();
-	}
-	queue.push(batch);
 }
 
 /** Processes the given project.

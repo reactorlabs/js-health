@@ -85,16 +85,39 @@ module.exports = {
 function downloadAtIndex(i, csvfilename, step, outputDir) {
 	outDir = outputDir + "/" + i;
 	tmpDir = outDir + "/tmp"; // temporary folder to download projects
-	let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
+	//let projects = fs.readFileSync(csvfilename, "utf8").split("\n");
 	let batch = []; // Files to process
 	utils.mkdir(outDir + "/snapshots", "-p");
+	var count = 0;	
 
+	const readStream = fs.createReadStream(csvfilename, {
+		encoding: "utf8"
+	});
+
+	console.log(csvfilename);
+
+	console.log("Reached");
+
+	readStream.on('data', (chunk) => {
+		console.log("reading stream");
+		for (let line of chunk.split("\n")) {
+			if ((count - i) % step === 0) {
+				let p = line.split(",");
+				batch.push({ name : p[0], lang : p[1], fork : p[2], index : n, folder : i});
+			}
+			console.log(count);
+			count = count + 1;
+		}
+	});
+
+/**
 	// turn every n + i^th project into an object and store it
+	var count = 0;
 	for (var n = i; n < projects.length; n = n + step) {
 		let p = projects[n].split(",");
 		batch.push({ name : p[0], lang : p[1], fork : p[2], index: n, folder: i });
 	}
-
+*/
 	let threads = 1;
 	let queue = async.queue(processProject, threads);
 	queue.drain = () => {

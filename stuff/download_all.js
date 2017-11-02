@@ -369,16 +369,17 @@ function closeProject(project, callback) {
     LOG(project, "DONE");
     // TODO change this, but for now only download the first 10 projects
     //if (project.index < 10)
-    callback();
-    return;
-/*
+//    callback();
+//    return;
+
     child_process.exec("rm -rf " + project.path, () => {
         // we are done with processing the project
+	console.log("rm -rf " + project.path);
         LOG(project, "ALL DONE");
         // TODO change this, but for now only download the first 10 projects
-        if (project.index < 10)
-            callback();
-    }); */
+        //if (project.index < 10)
+        callback();
+    }); 
 }
 
 function LOG(project, message) {

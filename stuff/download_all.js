@@ -348,6 +348,41 @@ function loadMetadata(project, callback) {
 }
 
 function storeProjectInfo(project, callback) {
+	LOG(project, "Storing project information");
+	let projectFile = project.outDir + "/project.json";
+	var SPcount = 1;
+	var SPlen = Object.keys(project).length;
+	
+	try {
+		fs.writeFileSync(projectFile, "{", "utf8");		
+		streamJSON(projectFile, project, SPcount, SPlen);
+	}
+	catch (error) {
+		throw error;
+	}
+	callback(null, project);
+
+	function streamJSON(projectFile, project, SPcount, SPlen) {
+		for (let i of Object.keys(project)) {
+				let item = project[i];
+				if (typeof(item) == 'object') {
+					let newlen = Object.keys(item).length;
+					let newcount = 1; // For counting whether to add a comma to the current key, value in object
+					streamJSON(projectFile, item, newcount, newlen);
+				}
+				var writeString = JSON.stringify(i) + ":" + JSON.stringify(item);
+				if (SPcount < SPlen) { writeString = writeString + ","; }; // Add a comma unless it's the last item in the object
+				fs.appendFileSync(projectFile, writeString, "utf8");
+				console.log("C: " + SPcount + " L: " + SPlen); // Debugging
+				SPcount = SPcount + 1; // Increment count for comma check
+		}
+	}
+	fs.appendFileSync(projectFile, "}", "utf8");
+
+}
+
+
+/**
     LOG(project, "Storing project information");
     let projectFile = project.outDir + "/project.json";
     fs.writeFile(projectFile, JSON.stringify(project), (error) => {
@@ -358,7 +393,10 @@ function storeProjectInfo(project, callback) {
             callback(null, project);
         }
     });
-}
+   */ 
+    
+
+
 
 /** Deletes the project from disk. 
  */

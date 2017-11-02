@@ -10,7 +10,7 @@
             "request": "launch",
             "name": "Launch Program",
             "program": "${workspaceRoot}/index.js",
-            "args": [ "dev-freqs", "/data/googlejs/topStars", "1000", "20"]
+            "args": [ "download-gh", "/data/googlejs/topStars", "1000", "20"]
         }
     ]
 

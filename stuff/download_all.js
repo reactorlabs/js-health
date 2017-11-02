@@ -367,14 +367,14 @@ function storeProjectInfo(project, callback) {
 				let item = project[i];
 				if (typeof(item) == 'object') {
 					let newlen = Object.keys(item).length;
-					let newcount = 1;
+					let newcount = 1; // For counting whether to add a comma to the current key, value in object
 					streamJSON(projectFile, item, newcount, newlen);
 				}
 				var writeString = JSON.stringify(i) + ":" + JSON.stringify(item);
-				if (SPcount < SPlen) { writeString = writeString + ","; };
+				if (SPcount < SPlen) { writeString = writeString + ","; }; // Add a comma unless it's the last item in the object
 				fs.appendFileSync(projectFile, writeString, "utf8");
-				console.log("C: " + SPcount + " L: " + SPlen);
-				SPcount = SPcount + 1;
+				console.log("C: " + SPcount + " L: " + SPlen); // Debugging
+				SPcount = SPcount + 1; // Increment count for comma check
 		}
 	}
 	fs.appendFileSync(projectFile, "}", "utf8");

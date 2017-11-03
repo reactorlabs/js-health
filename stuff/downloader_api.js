@@ -97,6 +97,7 @@ function TaskProject(task, callback) {
             let i = project.info
             // fill in the task project
             i.id = result.id;
+            i.name = result.name
             i.fullName = result.fullName;
             i.description = result.description;
             i.ownerId = result.owner.id;
@@ -238,14 +239,6 @@ function TaskSnapshot(task, callback) {
     );
 }
 
-
-
-
-
-
-
-
-// when asking for commits I can do since to only get those I am interested in
 
 
 

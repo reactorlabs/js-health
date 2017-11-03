@@ -11,7 +11,7 @@ module.exports = {
         console.time("all");
         apiTokens_ = apiTokens;
         console.log("Initialized with " + apiTokens_.length + " Github API tokens...");
-        Q = async.queue(Task, 1);
+        Q = async.queue(Task, 50);
         // add the task of loading a project
         Q.push({ kind : "project", url : "nborracha/titanium_mobile" });
 
@@ -38,7 +38,7 @@ module.exports = {
     }
 };
 
-let Q = null; async.queue(Task, 1);
+let Q = null; 
 
 var nextProjectId_ = 0;
 
@@ -154,8 +154,10 @@ function TaskBranch(task, callback) {
 function TaskCommit(task, callback) {
     let project = task.project;
     // no need to revisit the commit if we have already scanned it, or we are scanning it right now
-    if (project.commits[task.hash] !== undefined) 
+    if (project.commits[task.hash] !== undefined) {
         callback()
+        return;
+    }
     // otherwise add the commit
     let commit = {
         hash : task.hash
@@ -173,7 +175,7 @@ function TaskCommit(task, callback) {
                 email : result.commit.author.email,
             };
             // if the author is a github user, add the id
-            if (result.author !== undefined)
+            if (result.author)
                 commit.author.id = result.author.id;
             // Enqueue all parent commits
             commit.parents = [];
@@ -215,8 +217,17 @@ function TaskCommit(task, callback) {
     );
 }
 
+
+let snapshotIdx_ = 0;
+
 /** Obtain the snapshot of the file. */
 function TaskSnapshot(task, callback) {
+    // do every 10th file only, which should be what we endup with
+    if (snapshotIdx_++ != 10) {
+        callback();
+        return;
+    }
+    snapshotIdx_ = 0;
     // TODO this needs to be much more clever
     APIRequest(task.url, 
         (response, result) => {

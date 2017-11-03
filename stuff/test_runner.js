@@ -64,7 +64,7 @@ var self = module.exports = {
             analyzeProject(p);
 	    var testresult = doRunTests(p, d);
 	    if (testresult[1]) {
-	        entries.push(testresult[1]);
+	        entries.push([p.path, testresult[1]]);
 	    }
             if (testresult[0])
                 ++success;
@@ -140,16 +140,11 @@ function analyzeProject(p) {
 function doRunTests(p, d) {
     var start;
     var end;
-    var entry = false;
-    // Start timer if getting most time-intensive projects (i.e., "timeTests" option)	
-    if (d) {
-	start = new Date();
-    }
 
     if (p.npmTest || p.gulpTest || p.gruntTest) {
         console.log("Running tests for project " + p.path);
         if (!p.npm) {
-            console.log("  !!! not a NPM project");
+            console.log("  !!! not an NPM project");
         } else {
             console.log("  running npm install...");
             child_process.execSync("npm install", { cwd : p.path, timeout: 600000});
@@ -157,8 +152,10 @@ function doRunTests(p, d) {
         if (p.npmTest) {
             console.log("  npm test")
             try {
+	        start = new Date();
                 child_process.execSync("npm test", { cwd: p.path, timeout: 600000 });
-                return true;
+		end = new Date();
+                return [true, end - start];
             } catch (e) {
                 console.log("    error running the tests, or non-zero exit");
             }
@@ -166,8 +163,10 @@ function doRunTests(p, d) {
         if (p.gulpTest) {
             console.log("  gulp test");
             try {
+		start = new Date();
                 child_process.execSync("gulp test", { cwd: p.path, timeout: 600000 });
-                return true;
+                end = new Date();
+		return [true, end - start];
             } catch (e) {
                 console.log("    error running the tests, or non-zero exit");
             }
@@ -175,21 +174,15 @@ function doRunTests(p, d) {
         if (p.gruntTest) {
             console.log("  grunt test");
             try {
+		start = new Date();
                 child_process.execSync("grunt test", { cwd: p.path, timeout: 600000 });
-                return true;
+                end = new Date();
+		return [true, end - start];
             } catch (e) {
                 console.log("    error running the tests, or non-zero exit");
             }
         }
     }
 
-console.log("PROJECT===========");
-console.log(p);
-
-    if (d) {
-    	end = new Date();
-	entry = [p.path, end - start];
-    }
-
-    return [false, entry];
+    return [false, false];
 }

@@ -5,7 +5,7 @@ const readline = require('readline');
 const async = require("async");
 const utils = require("./utils.js");
 
-module.exports = {
+var self = module.exports = {
     help: function() {
         console.log("");
         console.log("testable OUTPUT NUM");
@@ -47,7 +47,8 @@ module.exports = {
         console.log("TOTAL TESTABLE        " + sumProjects(projects, (p) => p.npmTest || p.gulpTest || p.gruntTest ));
     },
     
-    runTests: function() {
+    runTests: function(d) {
+	let entries = [];
         if (process.argv.length !== 5) {
             module.exports.help();
             console.log("Invalid number of arguments for topStars action");
@@ -61,11 +62,32 @@ module.exports = {
         let i = 0;
         for (let p of projects) {
             analyzeProject(p);
-            if (doRunTests(p))
+	    var testresult = doRunTests(p, d);
+	    if (testresult[1]) {
+	        entries.push(testresult[1]);
+	    }
+            if (testresult[0])
                 ++success;
             ++i;
             console.log(">>> Analyzed " + i + " projects, successful tests " + success);
         }
+
+	if (d) {
+	    var testfile = "/testlengths.csv";
+	    var currentdir = process.cwd() + testfile;
+	    entries.sort(function(a, b) { return a[1] > b[1] ? 1 : -1; });
+		console.log(entries);
+		console.log(currentdir);
+	    for (let e of entries) {
+		    console.log(e);
+	        fs.appendFileSync(currentdir, e.toString() + "\n");
+	    }
+	}
+    },
+
+    timeTests: function() {
+	console.log("Timing project tests...");
+    	self.runTests(true); 
     }
 }
 
@@ -115,13 +137,21 @@ function analyzeProject(p) {
     //fs.writeFileSync(output + "/" + pid + ".json", JSON.stringify(project));
 }
 
-function doRunTests(p) {
+function doRunTests(p, d) {
+    var start;
+    var end;
+    var entry = false;
+    // Start timer if getting most time-intensive projects (i.e., "timeTests" option)	
+    if (d) {
+	start = new Date();
+    }
+
     if (p.npmTest || p.gulpTest || p.gruntTest) {
         console.log("Running tests for project " + p.path);
         if (!p.npm) {
-            console.log("  !!! not a NPM project")
+            console.log("  !!! not a NPM project");
         } else {
-            console.log("  running npm install...")
+            console.log("  running npm install...");
             child_process.execSync("npm install", { cwd : p.path, timeout: 600000});
         }
         if (p.npmTest) {
@@ -152,5 +182,14 @@ function doRunTests(p) {
             }
         }
     }
-    return false;
+
+console.log("PROJECT===========");
+console.log(p);
+
+    if (d) {
+    	end = new Date();
+	entry = [p.path, end - start];
+    }
+
+    return [false, entry];
 }

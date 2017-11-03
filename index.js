@@ -78,8 +78,10 @@ function main() {
             test_runner.analyzeProjects();
             break;
         case "runTests":
-            test_runner.runTests();
+            test_runner.runTests(false);
             break;
+	case "timeTests":
+	    test_runner.timeTests();
         case "help":
             help();
             break;

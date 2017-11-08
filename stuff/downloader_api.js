@@ -24,15 +24,92 @@ module.exports = {
     },
 
     download : function(apiTokens) {
-        projectOutputDir = "c:/delete/jsdownload/projects";
-        snapshotOutputDir = "c:/delete/jsdownload/files";
+        let numStrides = 100;
+        let strideIndex = 0;
+        let projectsFile = "/home/peta/JS_files.csv";
+        projectOutputDir = "/home/peta/jsdownload/projects";
+        snapshotOutputDir = "/home/peta/jsdownload/files";
 
         console.time("all");
         apiTokens_ = apiTokens;
         console.log("Initialized with " + apiTokens_.length + " Github API tokens...");
-        Q = async.queue(Task, 50);
+        console.log("Loading projects - stride ", strideIndex, "/", numStrides);
+
+
+
+        projects = [
+            //"nborracha/titanium_mobile",
+            "Offsite/TaskCodes",
+            "Gozala/addon-sdk",
+            "mobify/mobifyjs",
+            "substack/node-mkdirp",
+            "motiooon/node-mkdirp",
+            "hypomodern/jquery-oembed",
+            "woodwardjd/jquery-oembed",
+            "digitaljhelms/digitaljhelms.github.com",
+            "dstamant/wet-boew",
+            "chaplinjs/chaplin",
+            "charlesmorin/wet-boew",
+            "metalmumu/propelorm.github.com",
+            "mozilla-b2g/gaia",
+            "davidflanagan/gaia",
+            "nelstrom/Sencha-Touch-templates-demo",
+            "mozilla/butter",
+            "secretrobotron/butter",
+            "amccloud/backbone-bindings",
+            "ulifigueroa/i18n-js",
+            "malsup/blockui",
+            "EugenDueck/engine.io",
+            "baali/thrift_js",
+            "qarnac/CyberHawk-Adventure",
+            "ducksboard/gridster.js",
+            "visionmedia/uikit",
+            "douglascrockford/JSON-js",
+            "avoidwork/abaaso",
+            "ptmahent/JSON-js",
+            "jeffreyrack/CyberHawk-Adventure",
+            "pandell/JSON-js",
+            "hakimel/reveal.js",
+            "bittorrenttorque/btapp",
+            "CoNarrative/glujs",
+            "smithrp/glujs",
+            "adobe/brackets",
+            "jkk/eidogo",
+            "SupportBee/Backbone-Factory",
+            "emberjs/data",
+            "kbullaughey/data",
+            "stevenbenner/jquery-powertip",
+            "lukemelia/data",
+            "romancortes/montage",
+            "huerlisi/data",
+            "rgrove/lazyload",
+            "josepjaume/emberjs-data",
+            "github/hubot",
+            "bellycard/hubot",
+            "binaryjs/binaryjs",
+            "programmist/binaryjs",
+            "sjhernes/angular.js",
+            "ebbes/system-monitor-applet",
+            "wingrunr21/hubot",
+            "mercadolibre/mercadolibre.js",
+            "TioBorracho/mercadolibre.js",
+            "igorkasyanchuk/tv",
+            "h5bp/html5please",
+            "meteor/meteor",
+            "michael/github",
+            "emberjs/ember.js",
+            "sproutcore/sproutcore",
+            "antimatter15/summerTorrent",
+            "crdlc/gaia",
+            "mjschranz/butter",
+            "fullcalendar/fullcalendar",
+            "blackberry-community/Community",
+            "glebtv/jquery-openxtag"
+        ]
+
+        Q = async.queue(Task, 500);
         // add the task of loading a project
-        Q.push({ kind : "project", url : "nborracha/titanium_mobile" });
+        Q.push({ kind : "project", index: 0 });
 
 
         // when the queue is done, exit
@@ -43,7 +120,7 @@ module.exports = {
         }
 
         setInterval(() => {
-            console.log("Q: " + Q.running() + "/" + Q.length() + " - files " + stats_files + ", snapshots: " + stats_snapshots);
+            console.log("Q: " + Q.running() + "/" + Q.length() + " - T: " + (++stats_time) + ", R: " + stats_requests + "(" + stats_retries + "), P : " + stats_projects +  ", F: " + stats_files + ", S: " + stats_snapshots);
         }, 1000)
 /*
 
@@ -64,9 +141,13 @@ module.exports = {
 let stats_projects = 0;
 let stats_files = 0;
 let stats_snapshots = 0;
+let stats_requests = 0;
+let stats_retries = 0;
+let stats_time = 0;
 
 let projectOutputDir = null;
 let snapshotOutputDir = null;
+let projects = [];
 
 let Q = null; 
 
@@ -127,7 +208,8 @@ function InitializeProjectPath(project, callback) {
 
 function SaveProjectInfo(project, callback) {
     fs.writeFile(project.path + "/project.json", JSON.stringify(project.info), (err) => {
-        callback(err);
+        // TODO check error
+        EndProjectTask(project, callback);
     });
 }
 
@@ -137,10 +219,26 @@ function SaveCommit(project, commit, callback) {
     mkdir(project.path, subdir, (err) => {
         // TODO check error
         fs.writeFile(project.path + "/" + subdir + "/" + commit.hash + ".json", JSON.stringify(commit), (err) => {
-            callback(err);
+            // TODO check error
+            EndProjectTask(project, callback);
         });
     });
 }
+
+function AddProjectTask(project, task) {
+    project.tasks++;
+    Q.unshift(task);
+}
+
+function EndProjectTask(project, callback) {
+    if (--project.tasks == 0) {
+        console.log("Closing project " + project.info.name);
+        ++stats_projects;
+    } else {
+        callback();
+    }
+}
+
 
 /**  */
 function TaskProject(task, callback) {
@@ -148,7 +246,9 @@ function TaskProject(task, callback) {
     let project = {
         info : {},
         branches : {},
-        commits : {}
+        commits : {},
+        // number of active tasks for the project, when drops to 0, we know the project has been processed successfully
+        tasks : 1,
     };
     if (task.id !== undefined) {
         // TODO load the project information from disk and specify task's URL 
@@ -156,9 +256,15 @@ function TaskProject(task, callback) {
         // make sure that 
     }
     // now get the metadata for the project 
-    project.url = "http://api.github.com/repos/" + task.url;
+
+    project.url = "http://api.github.com/repos/" + projects[task.index];
+    console.log("opening project " + projects[task.index]);
     APIRequest(project.url,
         (error, response, result) => {
+            if (response.statusCode == 404) {
+                EndProjectTask(project, callback)
+                return;
+            }
             let i = project.info
             // fill in the task project
             i.id = result.id;
@@ -186,7 +292,7 @@ function TaskProject(task, callback) {
             InitializeProjectPath(project, (err) => {
                 // TODO make sure there is no error
                 // mark the default branch for analysis
-                Q.unshift({
+                AddProjectTask(project, {
                     kind : "branch",
                     branch : i.default_branch,
                     project : project
@@ -196,6 +302,8 @@ function TaskProject(task, callback) {
             });
         }
     );
+    if (task.index < projects.length)
+        Q.push({ kind: "project", index : task.index + 1});
 }
 
 function TaskBranch(task, callback) {
@@ -208,13 +316,13 @@ function TaskBranch(task, callback) {
                 commit : result.commit.sha
             }
             project.branches[branch.name] = branch;
-            Q.unshift({
+            AddProjectTask(project, {
                 kind : "commit",
                 hash : branch.commit,
                 project : project
             })
             // output the branch info
-            callback();
+            EndProjectTask(project, callback);
         }
     );
 }
@@ -223,7 +331,7 @@ function TaskCommit(task, callback) {
     let project = task.project;
     // no need to revisit the commit if we have already scanned it, or we are scanning it right now
     if (project.commits[task.hash] !== undefined) {
-        callback()
+        EndProjectTask(project, callback);
         return;
     }
     // otherwise add the commit
@@ -248,7 +356,7 @@ function TaskCommit(task, callback) {
             // Enqueue all parent commits
             commit.parents = [];
             for (parent of result.parents) {
-                Q.unshift({
+                AddProjectTask(project, {
                     kind : "commit",
                     hash : parent.sha,
                     project : project
@@ -280,8 +388,9 @@ function TaskCommit(task, callback) {
                     if (!f.sha)
                         continue;
                     fileInfo.hash = f.sha
-                    Q.unshift({
+                    AddProjectTask(project, {
                         kind : "snapshot",
+                        project : project,
                         hash : f.sha,
                         url : f.raw_url 
                     });
@@ -298,7 +407,6 @@ function TaskCommit(task, callback) {
 
 /** Obtain the snapshot of the file. */
 function TaskSnapshot(task, callback) {
-    ++ stats_files;
     // first see if we already have the snapshot
     let subdir1 = task.hash.substr(0, 2);
     let subdir2 = task.hash.substr(2, 2);
@@ -315,8 +423,10 @@ function TaskSnapshot(task, callback) {
                         (error, response, result) => {
                             // TODO handle error
                             fs.writeFile(snapshotPath, result, (err) => {
+                                // TODO handle error
+                                ++stats_files;
                                 ++stats_snapshots;
-                                callback(err);
+                                EndProjectTask(task.project, callback);
                             });
                         },
                         false // no JSON
@@ -325,7 +435,8 @@ function TaskSnapshot(task, callback) {
             });
         } else {
             // there was no error, the snapshot already exists, no need to download it
-            callback(null);
+            ++ stats_files;
+            EndProjectTask(task.project, callback);
         }
     });
 }
@@ -336,7 +447,8 @@ function TaskSnapshot(task, callback) {
 let apiTokens_ = null;
 let apiTokenIndex_ = 0;
 
-/** Since the github  */
+
+/*
 function APIFullRequest(url, onDone, onError, per_page = 100) {
     var result = [];
     let cont = (response, body) => {
@@ -362,7 +474,7 @@ function APIFullRequest(url, onDone, onError, per_page = 100) {
         cont,
         onError
     );
-}
+} */
 
 function APIRequest(url, onDone, json = true, retries = 10) {
     // rotate the api tokens to circumvent the 5000 requests per hour github limit
@@ -380,10 +492,12 @@ function APIRequest(url, onDone, json = true, retries = 10) {
     };
     // call request, async
     request(options, (error, response, body) => {
+        ++stats_requests;
         // first see if we should retry the request  && error.code == "ETIMEDOUT"
         if (error) {
             if (retries > 0) {
                 console.log(url + " -- retry " + retries);
+                ++stats_retries;
                 APIRequest(url, onDone, json, retries - 1);
                 return;
             } 

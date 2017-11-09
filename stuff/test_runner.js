@@ -153,8 +153,6 @@ function analyzeProject(p) {
             if (pjson.scripts !== undefined) {
                 if (pjson.scripts.test !== undefined)
                     p.npmTest = true;
-//                else if (pjson.scripts.tests !== undefined)
-//                    p.npmTest = true;
             }
         } catch (e) {
             p.badPackageJson = true;    
@@ -176,8 +174,6 @@ function analyzeProject(p) {
         else if (x.indexOf("gulp.task(\"test\"") !== -1)
             p.gulpTest = true;
     }
-    // store the updated project JSON
-    //fs.writeFileSync(output + "/" + pid + ".json", JSON.stringify(project));
 }
 
 function doRunTests(p, d) {

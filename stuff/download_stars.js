@@ -27,9 +27,6 @@ module.exports = {
         let numProjects = Number.parseInt(process.argv[4]);
         let language = process.argv[5];
         console.log("Downloading top " + numProjects + " projects...");
-        //utils.mkdir(output, "-p");
-        //console.log("  language:     " + language);
-        //console.log("  output dir:   " + output);
         let stars = undefined;
         let projects = {};
         let tidx = 0;

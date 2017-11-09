@@ -48,14 +48,14 @@ var self = module.exports = {
     },
    
     downloadTestProjects(apiTokens) {
-	if (process.argv.length != 5) {
+	if (process.argv.length != 4) {
 		console.log("Usage: node index.js downloadTestProjects <file> <outDir>");
 		process.exit(-1);
 	}
 	console.log("Downloading test projects...");
 	let max = apiTokens.length;
 	let tidx = Math.floor(Math.random() * (max - 0) + 0); // Randomize api token to start
-	let idx = 0;
+	let idx = 0; // folder number
     	let outpath = process.argv[4];
 	let filename = process.argv[3];
 	let projects = fs.readFileSync(filename, "utf8").split("\n");
@@ -67,17 +67,21 @@ var self = module.exports = {
 		let json = JSON.parse(response);
 		if (json.message === "Moved Permanently") {
 			redirect = json.url;
+			// get project's github info as JSON
 			cmd = "curl -s -H \"Authorization token " + apiTokens[tidx] + "\" \"" + redirect + "\"";
 			response = child_process.execSync(cmd);
 			json = JSON.parse(response);
 		}
+		// clone project
 		let clone_path = outpath + "/" + idx;
 		let clone_cmd = "git clone " + json.clone_url + " " + clone_path;
 		utils.mkdir(clone_path, "-p");		
 		child_process.execSync(clone_cmd);
+		// store github JSON in file
 		fs.writeFileSync(outpath + "/" + idx + ".json", JSON.stringify(json));
 		tidx = tidx + 1;
 		idx = idx + 1;
+		// go back to beginning of api token array
 		if (tidx > max) {
 			tidx = 0;
 		}
@@ -100,7 +104,6 @@ var self = module.exports = {
         }
         let output = process.argv[3];
         let num = Number.parseInt(process.argv[4]);
-        // get all projects we have
         let projects = utils.listProjects(output, num);
         let success = 0;
         let i = 0;
@@ -118,8 +121,6 @@ var self = module.exports = {
 
 	if (d) {
 	    entries.sort(function(a, b) { return a[1] > b[1] ? 1 : -1; });
-	//	console.log(entries);
-	//	console.log(currentdir);
 	    for (let e of entries) {
 		    console.log(e);
 	        fs.appendFileSync(currentdir, e.toString() + "\n");

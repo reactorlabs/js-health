@@ -46,8 +46,52 @@ var self = module.exports = {
         console.log("bad package.json      " + sumProjects(projects, (p) => p.badPackageJson=== true ));
         console.log("TOTAL TESTABLE        " + sumProjects(projects, (p) => p.npmTest || p.gulpTest || p.gruntTest ));
     },
-    
+   
+    downloadTestProjects(apiTokens) {
+	if (process.argv.length != 5) {
+		console.log("Usage: node index.js downloadTestProjects <file> <outDir>");
+		process.exit(-1);
+	}
+	console.log("Downloading test projects...");
+	let max = apiTokens.length;
+	let tidx = Math.floor(Math.random() * (max - 0) + 0); // Randomize api token to start
+	let idx = 0;
+    	let outpath = process.argv[4];
+	let filename = process.argv[3];
+	let projects = fs.readFileSync(filename, "utf8").split("\n");
+	// curl the projects and just print them out
+	for (let p of projects) {
+		console.log(p);
+		let cmd = "curl -s -H \"Authorization token " + apiTokens[tidx] + "\" \"" + p + "\"";
+		let response = child_process.execSync(cmd);
+		let json = JSON.parse(response);
+		if (json.message === "Moved Permanently") {
+			redirect = json.url;
+			cmd = "curl -s -H \"Authorization token " + apiTokens[tidx] + "\" \"" + redirect + "\"";
+			response = child_process.execSync(cmd);
+			json = JSON.parse(response);
+		}
+		let clone_path = outpath + "/" + idx;
+		let clone_cmd = "git clone " + json.clone_url + " " + clone_path;
+		utils.mkdir(clone_path, "-p");		
+		child_process.execSync(clone_cmd);
+		fs.writeFileSync(outpath + "/" + idx + ".json", JSON.stringify(json));
+		tidx = tidx + 1;
+		idx = idx + 1;
+		if (tidx > max) {
+			tidx = 0;
+		}
+	}
+    },
+
     runTests: function(d) {
+        var testfile = "/testlengths.csv";
+        var currentdir = process.cwd() + testfile;
+
+	if (utils.isFile(currentdir)) {
+	    fs.unlinkSync(currentdir);
+    	} 
+
 	let entries = [];
         if (process.argv.length !== 5) {
             module.exports.help();
@@ -73,11 +117,9 @@ var self = module.exports = {
         }
 
 	if (d) {
-	    var testfile = "/testlengths.csv";
-	    var currentdir = process.cwd() + testfile;
 	    entries.sort(function(a, b) { return a[1] > b[1] ? 1 : -1; });
-		console.log(entries);
-		console.log(currentdir);
+	//	console.log(entries);
+	//	console.log(currentdir);
 	    for (let e of entries) {
 		    console.log(e);
 	        fs.appendFileSync(currentdir, e.toString() + "\n");
@@ -147,7 +189,14 @@ function doRunTests(p, d) {
             console.log("  !!! not an NPM project");
         } else {
             console.log("  running npm install...");
-            child_process.execSync("npm install", { cwd : p.path, timeout: 600000});
+	    try {
+            	child_process.execSync("npm install", { cwd : p.path, timeout: 600000});
+	    }
+	    catch (e) {
+		console.log("  Error on NPM install for " + p.path);
+		console.log("  Resuming tests...");
+		return [false, false];
+	    }
         }
         if (p.npmTest) {
             console.log("  npm test")

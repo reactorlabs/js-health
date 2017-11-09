@@ -68,6 +68,8 @@ function main() {
         case "download":
             download_all.download(apiTokens);
             return;
+	case "downloadTestProjects":
+	    test_runner.downloadTestProjects(apiTokens);
 	case "git_js":
 	    download_all.git_js(apiTokens);
 	    return;

@@ -48,7 +48,7 @@ var self = module.exports = {
     },
    
     downloadTestProjects(apiTokens) {
-	if (process.argv.length != 4) {
+	if (process.argv.length != 5) {
 		console.log("Usage: node index.js downloadTestProjects <file> <outDir>");
 		process.exit(-1);
 	}

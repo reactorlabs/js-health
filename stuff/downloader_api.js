@@ -107,7 +107,7 @@ module.exports = {
             "glebtv/jquery-openxtag"
         ]
 
-        Q = async.queue(Task, 500);
+        Q = async.queue(Task, 50);
         // add the task of loading a project
         Q.push({ kind : "project", index: 0 });
 
@@ -186,33 +186,63 @@ function IsValidFilename(filename) {
     return false;
 }
 
+function ProjectNameToPath(fullName) {
+    let path = "";
+    for (let i = 0; i < fullName.length; ++i) {
+        let x = fullName[i];
+        if (
+            (x >= '0' && x < '9') ||
+            (x >= 'a' && x < 'z') ||
+            (x >= 'A' && x < 'Z') ||
+            (x == '-')
+        ) {
+            path += x;
+        } else {
+            path = path + '_';
+            x = x.charCodeAt(0);
+            let xx = Math.floor(x / 16);
+            path += xx.toString(16);
+            xx = x % 16;
+            path += xx.toString(16);
+        }
+    }
+    return path;
+}
+
+
+
+/** Initializes the path where to store project information. */
 function InitializeProjectPath(project, callback) {
     // if the project path exists, then we do not need to do anything, call the callback immediately
     if (project.path) {
         callback(null);
     } else {
-        // otherwise we first make sure we have the directories, starting with the subdir
-        let subdir = project.info.id % 2000;
-        mkdir(projectOutputDir, subdir, (err) => {
+        project.fullNamePath = ProjectNameToPath(project.info.fullName);
+        project.pathPrefix = project.fullNamePath.substr(0,2);
+        mkdir(projectOutputDir, project.pathPrefix, (err) => {
             // TODO check error
             // then followed by the actual project directory
-            mkdir(projectOutputDir + "/" + subdir, project.info.id, (err) => {
+            mkdir(projectOutputDir + "/" + project.pathPrefix, project.fullNamePath, (err) => {
                 // TODO check error
                 // set the project path, and call itself again, this time actually storing the file
-                project.path = projectOutputDir + "/" + subdir + "/" + project.info.id;
+                project.path = projectOutputDir + "/" + project.pathPrefix + "/" + project.fullNamePath;
                 callback(err);
             });
         });
     }
 }
 
+/** Saves the project information. This is the last thing we do for a project so that we can easily distinguish a project that has already been analyzed from a project that was stopped in the middle of the analysis and therefore must be restarted. */
 function SaveProjectInfo(project, callback) {
     fs.writeFile(project.path + "/project.json", JSON.stringify(project.info), (err) => {
+        // TODO should also store any errors, or delete old errors if any 
         // TODO check error
-        EndProjectTask(project, callback);
+        ++stats_projects;
+        callback();
     });
 }
 
+/** Saves the commit information. The commit information can be saved as soon as all its snapshots and parent commits are scheduled. This is safe because if the downloader is stopped while still processing the snapshots of the commit, the whole project was not finished and therefore will be restarted anyways. */
 function SaveCommit(project, commit, callback) {
     // first make sure the path for the commit exists
     let subdir = commit.hash.substr(0, 2);
@@ -225,15 +255,18 @@ function SaveCommit(project, commit, callback) {
     });
 }
 
+/** Whenever a new task that belongs to a project is spawned, the project must be made aware of it so that we can determine when all project tasks have finished and the project can therefore be closed. */
 function AddProjectTask(project, task) {
     project.tasks++;
     Q.unshift(task);
 }
 
+/** When a task that belongs to certain project is finished, we decrement the number of active tasks for that project. When this number gets to zero, we know we have analyzed the project completely and therefore can store the project information.
+ */
 function EndProjectTask(project, callback) {
     if (--project.tasks == 0) {
-        console.log("Closing project " + project.info.name);
-        ++stats_projects;
+        console.log("Closing project " + project.info.fullName);
+        SaveProjectInfo(project, callback);
     } else {
         callback();
     }
@@ -244,11 +277,15 @@ function EndProjectTask(project, callback) {
 function TaskProject(task, callback) {
     // create the project
     let project = {
-        info : {},
+        info : {
+            fullName : projects[task.index]
+        },
         branches : {},
         commits : {},
         // number of active tasks for the project, when drops to 0, we know the project has been processed successfully
         tasks : 1,
+        // errors that happened during processing of the project
+        errors : []
     };
     if (task.id !== undefined) {
         // TODO load the project information from disk and specify task's URL 
@@ -256,7 +293,6 @@ function TaskProject(task, callback) {
         // make sure that 
     }
     // now get the metadata for the project 
-
     project.url = "http://api.github.com/repos/" + projects[task.index];
     console.log("opening project " + projects[task.index]);
     APIRequest(project.url,
@@ -269,7 +305,7 @@ function TaskProject(task, callback) {
             // fill in the task project
             i.id = result.id;
             i.name = result.name
-            i.fullName = result.fullName;
+            //i.fullName = result.fullName;
             i.description = result.description;
             i.ownerId = result.owner.id;
             i.fork = result.fork;
@@ -298,11 +334,11 @@ function TaskProject(task, callback) {
                     project : project
                 });
                 // save the project info, which also executes our callback
-                SaveProjectInfo(project, callback);
+                EndProjectTask(project, callback);
             });
         }
     );
-    if (task.index < projects.length)
+    if (task.index < projects.length - 1)
         Q.push({ kind: "project", index : task.index + 1});
 }
 

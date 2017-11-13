@@ -1,6 +1,8 @@
 const async = require("async");
 const request = require("request")
 const fs = require("fs");
+const readline = require("readline")
+const mkdirp = require("mkdirp")
 
 // helpers which should eventually go to utils
 
@@ -16,6 +18,8 @@ function mkdir(where, name, callback) {
 }
 
 
+// TODO get repositories 
+
 
 module.exports = {
 
@@ -26,115 +30,43 @@ module.exports = {
     download : function(apiTokens) {
         let numStrides = 100;
         let strideIndex = 0;
-        let projectsFile = "/home/peta/JS_files.csv";
+        let projectsFile = "/home/peta/projects-js.csv";
         projectOutputDir = "/home/peta/jsdownload/projects";
         snapshotOutputDir = "/home/peta/jsdownload/files";
 
+
         console.time("all");
+        mkdirp.sync(projectOutputDir);
+        mkdirp.sync(snapshotOutputDir);
+
         apiTokens_ = apiTokens;
         console.log("Initialized with " + apiTokens_.length + " Github API tokens...");
         console.log("Loading projects - stride ", strideIndex, "/", numStrides);
 
+        projects = []
 
-
-        projects = [
-            //"nborracha/titanium_mobile",
-            "Offsite/TaskCodes",
-            "Gozala/addon-sdk",
-            "mobify/mobifyjs",
-            "substack/node-mkdirp",
-            "motiooon/node-mkdirp",
-            "hypomodern/jquery-oembed",
-            "woodwardjd/jquery-oembed",
-            "digitaljhelms/digitaljhelms.github.com",
-            "dstamant/wet-boew",
-            "chaplinjs/chaplin",
-            "charlesmorin/wet-boew",
-            "metalmumu/propelorm.github.com",
-            "mozilla-b2g/gaia",
-            "davidflanagan/gaia",
-            "nelstrom/Sencha-Touch-templates-demo",
-            "mozilla/butter",
-            "secretrobotron/butter",
-            "amccloud/backbone-bindings",
-            "ulifigueroa/i18n-js",
-            "malsup/blockui",
-            "EugenDueck/engine.io",
-            "baali/thrift_js",
-            "qarnac/CyberHawk-Adventure",
-            "ducksboard/gridster.js",
-            "visionmedia/uikit",
-            "douglascrockford/JSON-js",
-            "avoidwork/abaaso",
-            "ptmahent/JSON-js",
-            "jeffreyrack/CyberHawk-Adventure",
-            "pandell/JSON-js",
-            "hakimel/reveal.js",
-            "bittorrenttorque/btapp",
-            "CoNarrative/glujs",
-            "smithrp/glujs",
-            "adobe/brackets",
-            "jkk/eidogo",
-            "SupportBee/Backbone-Factory",
-            "emberjs/data",
-            "kbullaughey/data",
-            "stevenbenner/jquery-powertip",
-            "lukemelia/data",
-            "romancortes/montage",
-            "huerlisi/data",
-            "rgrove/lazyload",
-            "josepjaume/emberjs-data",
-            "github/hubot",
-            "bellycard/hubot",
-            "binaryjs/binaryjs",
-            "programmist/binaryjs",
-            "sjhernes/angular.js",
-            "ebbes/system-monitor-applet",
-            "wingrunr21/hubot",
-            "mercadolibre/mercadolibre.js",
-            "TioBorracho/mercadolibre.js",
-            "igorkasyanchuk/tv",
-            "h5bp/html5please",
-            "meteor/meteor",
-            "michael/github",
-            "emberjs/ember.js",
-            "sproutcore/sproutcore",
-            "antimatter15/summerTorrent",
-            "crdlc/gaia",
-            "mjschranz/butter",
-            "fullcalendar/fullcalendar",
-            "blackberry-community/Community",
-            "glebtv/jquery-openxtag"
-        ]
-
-        Q = async.queue(Task, 50);
-        // add the task of loading a project
-        Q.push({ kind : "project", index: 0 });
-
-
-        // when the queue is done, exit
-        Q.drain = () => {
-            console.timeEnd("all");
-            console.log("KTHXBYE");
-            process.exit();
-        }
-
-        setInterval(() => {
-            console.log("Q: " + Q.running() + "/" + Q.length() + " - T: " + (++stats_time) + ", R: " + stats_requests + "(" + stats_retries + "), P : " + stats_projects +  ", F: " + stats_files + ", S: " + stats_snapshots);
-        }, 1000)
-/*
-
-        // load the projects now
-        APIFullRequest(
-            "http://api.github.com/repos/nborracha/titanium_mobile/commits",
-            //"http://www.seznam.cz",
-            (response, result) => {
-                console.log(result.length);
-            },
-            (error, response, result) => {
-                console.log(error);
+        let input = readline.createInterface({
+            input : fs.createReadStream(projectsFile)
+        });
+        input.on("line", (line) => {
+            let fullName = line.split(",")[0]
+            projects.append(fullName);
+        });
+        input.on("close", () => {
+            console.log("Loaded " + projects.length + " projects. Starting the worker's queue");
+            Q = async.queue(Task, 500);
+            // queue the first project
+            Q.push({ kind: "project", index: 0})
+            // when the queue is done, exit
+            Q.drain = () => {
+                console.timeEnd("all");
+                console.log("KTHXBYE");
+                process.exit();
             }
-        ); */
+            setInterval(() => {
+                console.log("Q: " + Q.running() + "/" + Q.length() + " - T: " + (++stats_time) + ", R: " + stats_requests + "(" + stats_retries + "), P : " + stats_projects +  ", F: " + stats_files + ", S: " + stats_snapshots);
+            }, 1000)
+        });
     }
 };
 
@@ -166,13 +98,6 @@ function Task(task, callback) {
     }
 }
 
-function Error(callback) {
-    return (error, response, result) => {
-        console.log("API Error");
-        callback();
-    }
-}
-
 /** Returns true if the given filename should be recorded, false otherwise.
  */
 function IsValidFilename(filename) {
@@ -186,6 +111,7 @@ function IsValidFilename(filename) {
     return false;
 }
 
+/** Converts the repository full name (repo owner + repo name) to something that can be a path on disk. We keep all numbers and letters as well as a hyphen, everything else is encoded as underscore followed by the hex ASCII code of the character. */
 function ProjectNameToPath(fullName) {
     let path = "";
     for (let i = 0; i < fullName.length; ++i) {
@@ -208,9 +134,6 @@ function ProjectNameToPath(fullName) {
     }
     return path;
 }
-
-
-
 /** Initializes the path where to store project information. */
 function InitializeProjectPath(project, callback) {
     // if the project path exists, then we do not need to do anything, call the callback immediately
@@ -220,13 +143,19 @@ function InitializeProjectPath(project, callback) {
         project.fullNamePath = ProjectNameToPath(project.info.fullName);
         project.pathPrefix = project.fullNamePath.substr(0,2);
         mkdir(projectOutputDir, project.pathPrefix, (err) => {
-            // TODO check error
+            if (err) {
+                ProjectFatalError(callback, project, err, " Unable to create the project folder");
+                return;
+            }
             // then followed by the actual project directory
             mkdir(projectOutputDir + "/" + project.pathPrefix, project.fullNamePath, (err) => {
-                // TODO check error
+                if (err) {
+                    ProjectFatalError(callback, project, err, " Unable to create the project folder");
+                    return;
+                }
                 // set the project path, and call itself again, this time actually storing the file
                 project.path = projectOutputDir + "/" + project.pathPrefix + "/" + project.fullNamePath;
-                callback(err);
+                callback();
             });
         });
     }
@@ -234,24 +163,53 @@ function InitializeProjectPath(project, callback) {
 
 /** Saves the project information. This is the last thing we do for a project so that we can easily distinguish a project that has already been analyzed from a project that was stopped in the middle of the analysis and therefore must be restarted. */
 function SaveProjectInfo(project, callback) {
-    fs.writeFile(project.path + "/project.json", JSON.stringify(project.info), (err) => {
-        // TODO should also store any errors, or delete old errors if any 
-        // TODO check error
-        ++stats_projects;
-        callback();
-    });
+    let saveInfo = () => {
+        fs.writeFile(project.path + "/project.json", JSON.stringify(project.info), (err) => {
+            if (err) {
+                ProjectFatalError(callback, project, err, "Unable to save project.json");
+            } else {
+                ++stats_projects;
+                callback();
+            }
+        });
+    };
+    // first see if there were any errors during downloading the project and if so, store them first
+    if (project.errors.length > 0) {
+        fs.writeFile(project.path + "/errors.json", JSON.stringify(project.errors), (err) => {
+            if (err)
+                ProjectFatalError(callback, project, err, "Unable to save errors.json");
+            else
+                // then finally save the project info itself as a last step in downloading the project
+                saveInfo();
+        })
+    } else {
+        // otherwise unlink the errors file
+        fs.unlink(project.patg + "/errors.json", (err) => {
+            // TODO what to do if we have error
+            if (err)
+                ProjectFatalError(callback, project, err, "Unable to delete the errors.json file");
+            else
+                saveInfo();
+        }); 
+    }
 }
+
 
 /** Saves the commit information. The commit information can be saved as soon as all its snapshots and parent commits are scheduled. This is safe because if the downloader is stopped while still processing the snapshots of the commit, the whole project was not finished and therefore will be restarted anyways. */
 function SaveCommit(project, commit, callback) {
     // first make sure the path for the commit exists
     let subdir = commit.hash.substr(0, 2);
     mkdir(project.path, subdir, (err) => {
-        // TODO check error
-        fs.writeFile(project.path + "/" + subdir + "/" + commit.hash + ".json", JSON.stringify(commit), (err) => {
-            // TODO check error
-            EndProjectTask(project, callback);
-        });
+        if (err) {
+            AddProjectError(callback, project, "commit", commit.hash, "Unable to create commit folder");
+        } else { 
+            fs.writeFile(project.path + "/" + subdir + "/" + commit.hash + ".json", JSON.stringify(commit), (err) => {
+                if (err) 
+                    AddProjectError(callback, project, "commit", commit.hash, "Unable to create commit json file");
+                else
+                    EndProjectTask(project, callback);
+            });
+        }
     });
 }
 
@@ -272,11 +230,34 @@ function EndProjectTask(project, callback) {
     }
 }
 
+/** When a fatal error in the project occurs, there is no need to do any further processing of the project so  */
+function ProjectFatalError(callback, project, err, reason) {
+    // mark the project as broken
+    project.ok = false;
+    // let the user know
+    console.log("Fatal error for project " + project.info.fullName + ":");
+    console.log("  ERR: " + err);
+    console.log("  Reason: " + reason);
+    // callback so that the worker queue can continue
+    callback();
+}
+
+/** Appends the given error to the list of errors within the project. All errors are saved at the end when all project tasks have finished.
+ */
+function AddProjectError(callback, project, kind, hash, reason) {
+    project.errors.append({
+        kind: kind,
+        hash: hash
+    })
+    EndProjectTask(project, callback);
+}
+
 
 /**  */
 function TaskProject(task, callback) {
     // create the project
     let project = {
+        ok : true, // if the project is not ok, there is no point in executing more of its tasks... 
         info : {
             fullName : projects[task.index]
         },
@@ -297,6 +278,7 @@ function TaskProject(task, callback) {
     console.log("opening project " + projects[task.index]);
     APIRequest(project.url,
         (error, response, result) => {
+            // This is ok, just means that the project was not found, i.e. has already been deleted, or made private
             if (response.statusCode == 404) {
                 EndProjectTask(project, callback)
                 return;
@@ -325,8 +307,7 @@ function TaskProject(task, callback) {
             if (result.parent !== undefined)
                 i.parent = result.parent.id;
             // now we must make sure that the project path exists before we can start processing the branches
-            InitializeProjectPath(project, (err) => {
-                // TODO make sure there is no error
+            InitializeProjectPath(project, () => {
                 // mark the default branch for analysis
                 AddProjectTask(project, {
                     kind : "branch",
@@ -342,11 +323,19 @@ function TaskProject(task, callback) {
         Q.push({ kind: "project", index : task.index + 1});
 }
 
+/** When checking a branch, we always perform the check to see if the commit has changed.
+ */
 function TaskBranch(task, callback) {
     let project = task.project
+    // if the project is not ok, ignore the task
+    if (! project.ok) {
+        callback();
+        return;
+    }
     APIRequest(project.url + "/branches/" + task.branch,
         (error, response, result) => {
-            // TODO what if the branch already exists?? 
+            if (error) 
+                return AddProjectError(callback, project, "branch", task.branch, "Unable to obtain information for branch " + task.branch);
             let branch = {
                 name : result.name,
                 commit : result.commit.sha
@@ -365,11 +354,12 @@ function TaskBranch(task, callback) {
 
 function TaskCommit(task, callback) {
     let project = task.project;
+    // if the project is not ok, ignore the task
+    if (! project.ok) 
+        return callback();
     // no need to revisit the commit if we have already scanned it, or we are scanning it right now
-    if (project.commits[task.hash] !== undefined) {
-        EndProjectTask(project, callback);
-        return;
-    }
+    if (project.commits[task.hash] !== undefined) 
+        return EndProjectTask(project, callback);
     // otherwise add the commit
     let commit = {
         hash : task.hash
@@ -379,9 +369,10 @@ function TaskCommit(task, callback) {
 
     APIRequest(project.url + "/commits/" + commit.hash, 
         (error, response, result) => {
+            if (error) 
+                return AddProjectError(callback, project, "commit", commit.hash, "Unable to obtain information for commit " + commit.hash);
             commit.date = result.commit.author.date;
             commit.message = result.commit.message;
-            commit.comment_count = result.commit.comment_count;
             commit.author = {
                 name : result.commit.author.name,
                 email : result.commit.author.email,
@@ -418,12 +409,12 @@ function TaskCommit(task, callback) {
                     fileInfo.previous_filename = f.previous_filename;
                 // add the hash of the file and schedule the snapshot if the file is not deleted or renamed
                 if (f.status !== "removed" && f.status !== "renamed") {
-                    if (f.raw_url === "https://github.com/nborracha/titanium_mobile/raw/9eeefe61b96c9dbff911fff2a0e6d88e4e9b104a/mobileweb/cli/commands/_run.js")
-                        console.log("here");
                     // if no hash for the file snapshot, we are not interested
+                    // TODO what does not this mean? 
                     if (!f.sha)
                         continue;
                     fileInfo.hash = f.sha
+                    // enque the task to download the file 
                     AddProjectTask(project, {
                         kind : "snapshot",
                         project : project,
@@ -443,6 +434,11 @@ function TaskCommit(task, callback) {
 
 /** Obtain the snapshot of the file. */
 function TaskSnapshot(task, callback) {
+    // if the project is not ok, ignore the task
+    if (! task.project.ok) {
+        callback();
+        return;
+    }
     // first see if we already have the snapshot
     let subdir1 = task.hash.substr(0, 2);
     let subdir2 = task.hash.substr(2, 2);
@@ -451,15 +447,19 @@ function TaskSnapshot(task, callback) {
         if (err) {
             // if the snapshot does not exist, make first sure that the path exists
             mkdir(snapshotOutputDir, subdir1, (err) => {
-                // TODO handle error
+                if (err) 
+                    return AddProjectError(callback, task.project, "snapshot", task.hash, "Unable to create folder for snapshot " + task.hash);
                 mkdir(snapshotOutputDir + "/" + subdir1, subdir2, (err) => {
-                    // TODO handle error
+                    if (err) 
+                        return AddProjectError(callback, task.project, "snapshot", task.hash, "Unable to create folder for snapshot " + task.hash);
                     APIRequest(
                         task.url, 
                         (error, response, result) => {
-                            // TODO handle error
+                            if (error) 
+                                return AddProjectError(callback, task.project, "snapshot", task.hash, "Unable to get snapshot " + task.hash + " from github");
                             fs.writeFile(snapshotPath, result, (err) => {
-                                // TODO handle error
+                                if (err) 
+                                    return AddProjectError(callback, task.project, "snapshot", task.hash, "Unable to store snapshot " + task.hash);
                                 ++stats_files;
                                 ++stats_snapshots;
                                 EndProjectTask(task.project, callback);
@@ -483,35 +483,6 @@ function TaskSnapshot(task, callback) {
 let apiTokens_ = null;
 let apiTokenIndex_ = 0;
 
-
-/*
-function APIFullRequest(url, onDone, onError, per_page = 100) {
-    var result = [];
-    let cont = (response, body) => {
-        // append the results to the result, in place
-        Array.prototype.push.apply(result, body);
-        // determine if there is more to call
-        let link = response.headers.link;
-        if (link !== undefined) {
-            // we are only interested in the first link
-            link = link.split(", ")[0].split("; ");
-            if (link[1] === "rel=\"next\"") {
-                newUrl = link[0].substr(1).split(">")[0];
-                APIRequest(newUrl, cont, onError);
-                return;
-            }
-        }
-        onDone(response, result);
-    };
-    // set the per-page limit
-    url = url + "?per_page=" + per_page;
-    APIRequest(
-        url,
-        cont,
-        onError
-    );
-} */
-
 function APIRequest(url, onDone, json = true, retries = 10) {
     // rotate the api tokens to circumvent the 5000 requests per hour github limit
     let token = apiTokens[apiTokenIndex_++];
@@ -528,7 +499,9 @@ function APIRequest(url, onDone, json = true, retries = 10) {
     };
     // call request, async
     request(options, (error, response, body) => {
-        ++stats_requests;
+        // only count the JSON requests because the raw requests do not count towards the github API limits 
+        if (json)
+            ++stats_requests;
         // first see if we should retry the request  && error.code == "ETIMEDOUT"
         if (error) {
             if (retries > 0) {

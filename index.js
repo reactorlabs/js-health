@@ -9,6 +9,7 @@ const test_runner = require("./stuff/test_runner.js");
 const download_all = require("./stuff/download_all.js");
 const sift = require("./stuff/type_sorter.js");
 const downloader_api = require("./stuff/downloader_api.js");
+const filter = require("./stuff/projects_filter.js")
 
 apiTokens = [
     "36df491663476ff4a13d53188253d43b5ef6d3c9",
@@ -66,6 +67,9 @@ function main() {
 
     let action = process.argv[2];
     switch (action) {
+        case "filter":
+            filter.filter();
+            return;
         case "download-gh":
             downloader_api.download(apiTokens);
             return;

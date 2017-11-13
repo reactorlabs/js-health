@@ -164,7 +164,7 @@ function InitializeProjectPath(project, callback) {
 /** Saves the project information. This is the last thing we do for a project so that we can easily distinguish a project that has already been analyzed from a project that was stopped in the middle of the analysis and therefore must be restarted. */
 function SaveProjectInfo(project, callback) {
     let saveInfo = () => {
-        fs.writeFile(project.path + "/project.json", JSON.stringify(project.info), (err) => {
+        fs.writeFile(project.path + "/project.json", JSON.stringify({ info: project.info, branches : project.branches }), (err) => {
             if (err) {
                 ProjectFatalError(callback, project, err, "Unable to save project.json");
             } else {

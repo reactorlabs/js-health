@@ -1,6 +1,6 @@
 #!/bin/bash
 urls="projecturls.txt"
-folder="timed_tests"
+folder="/git_tmp"
 
 # Download 102 test projects into the "timed_tests" folder
 # Usage: source little_benchmark.sh; download

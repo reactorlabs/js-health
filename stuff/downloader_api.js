@@ -312,7 +312,7 @@ function TaskProject(task, callback) {
                 i.open_issues_count = result.open_issues_count;
                 i.default_branch = result.default_branch;
                 // if the project is fork and we have parent, store its id
-                if (result.parent !== undefined) {
+                if (result.parent !== undefined)
                     i.parent = {
                         id : result.parent.id,
                         fullName : result.parent.full_name

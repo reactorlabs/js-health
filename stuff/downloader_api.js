@@ -27,7 +27,8 @@ module.exports = {
         let projectsFile = process.argv[3];
         let outputDir = process.argv[4];
         let apiTokens = process.argv[5];
-        let numWorkers = process.argv[6];
+        let numApiWorkers = process.argv[6];
+        let numDownloadWorkers = 300;
 
         projectOutputDir = outputDir + "/projects";
         snapshotOutputDir = outputDir + "/files";
@@ -51,18 +52,34 @@ module.exports = {
             projects.push(fullName);
         });
         input.on("close", () => {
-            console.log("Loaded " + projects.length + " projects. Starting the queue, workers: " + numWorkers);
-            Q = async.queue(Task, numWorkers);
+            console.log("Loaded " + projects.length + " projects.")
+            console.log("Starting the API queue, workers: " + numApiWorkers);
+            Qapi = async.queue(ApiTask, numApiWorkers);
+            console.log("Starting the download queue, workers: " + numDownloadWorkers);
+            Qdownload = async.queue(DownloadTask, numDownloadWorkers);
             // queue the first project
-            Q.push({ kind: "project", index: 0})
-            // when the queue is done, exit
-            Q.drain = () => {
-                console.timeEnd("all");
-                console.log("KTHXBYE");
-                process.exit();
+            Qapi.push({ kind: "project", index: 0})
+            // when all the queues are drained, we can exit
+            let canExit = () => {
+                if (Qapi.running() == 0 && Qapi.empty() &&
+                    Qdownload.running() == 0 && Qdownload.empty()) {
+                    console.timeEnd("all");
+                    console.log("KTHXBYE");
+                    process.exit();
+                }
             }
+
+
+            Qapi.drain = canExit;
+            Qdownload.drain = canExit;
             setInterval(() => {
-                console.log("Q: " + Q.running() + "/" + Q.length() + " - T: " + (++stats_time) + ", R: " + stats_requests + "(" + stats_retries + "), P : " + stats_projects +  ", F: " + stats_files + ", S: " + stats_snapshots);
+                console.log("Qa: " + Qapi.running() + "/" + Qapi.length() + 
+                         ", Qd: " + Qdownload.running() + "/" + Qdownload.length() + 
+                         ", T: " + (++stats_time) + 
+                         ", R: " + stats_requests + "(" + stats_retries + ")" + 
+                         ", P : " + stats_projects + 
+                         ", F: " + stats_files + 
+                         ", S: " + stats_snapshots);
             }, 1000)
         });
     }
@@ -79,11 +96,13 @@ let projectOutputDir = null;
 let snapshotOutputDir = null;
 let projects = [];
 
-let Q = null; 
+let Qapi = null;
+/** Queue for downloads */
+let Qdownload = null;
 
 /** Trampoline that performs the appropriate task from the main queue.
  */
-function Task(task, callback) {
+function ApiTask(task, callback) {
     switch (task.kind) {
         case "project":
             return TaskProject(task, callback);
@@ -91,8 +110,21 @@ function Task(task, callback) {
             return TaskBranch(task, callback);
         case "commit":
             return TaskCommit(task, callback);
+        case "clone":
+            return TaskClone(task, callback);
+        default:
+            console.log("Invalid api task " + task.kind);
+            callback();
+    }
+}
+
+function DownloadTask(task, callback) {
+    switch (task.kind) {
         case "snapshot":
             return TaskSnapshot(task, callback);
+        default:
+            console.log("Invalid download task " + task.kind);
+            callback();
     }
 }
 
@@ -212,9 +244,9 @@ function SaveCommit(project, commit, callback) {
 }
 
 /** Whenever a new task that belongs to a project is spawned, the project must be made aware of it so that we can determine when all project tasks have finished and the project can therefore be closed. */
-function AddProjectTask(project, task) {
+function AddProjectTask(queue, project, task) {
     project.tasks++;
-    Q.unshift(task);
+    queue.unshift(task);
 }
 
 /** When a task that belongs to certain project is finished, we decrement the number of active tasks for that project. When this number gets to zero, we know we have analyzed the project completely and therefore can store the project information.
@@ -225,10 +257,14 @@ function EndProjectTask(project, callback) {
             console.log("Closing project " + project.info.fullName + ", errors: " + project.errors.length);
         else
             console.log("Closing project " + project.info.fullName);
-        SaveProjectInfo(project, callback);
-    } else {
-        callback();
-    }
+        // delete the temp folder of the project, if any
+        if (project.tempCleanup)
+            project.tempCleanup();
+        // save project info and close the project
+        if (project.ok) 
+            return SaveProjectInfo(project, callback);
+    } 
+    callback();
 }
 
 /** When a fatal error in the project occurs, there is no need to do any further processing of the project so  */
@@ -239,7 +275,10 @@ function ProjectFatalError(callback, project, err, reason) {
     console.log("Fatal error for project " + project.info.fullName + ":");
     console.log("  ERR: " + err);
     console.log("  Reason: " + reason);
-    // callback so that the worker queue can continue
+    // delete the temp folder of the project, if any
+    if (project.tempCleanup)
+        project.tempCleanup();
+    // call the callback so that the workers can continue
     callback();
 }
 
@@ -327,7 +366,7 @@ function TaskProject(task, callback) {
                         // now we must make sure that the project path exists before we can start processing the branches
                     InitializeProjectPath(project, () => {
                         // mark the default branch for analysis
-                        AddProjectTask(project, {
+                        AddProjectTask(Qapi, project, {
                             kind : "branch",
                             branch : i.default_branch,
                             project : project
@@ -341,8 +380,35 @@ function TaskProject(task, callback) {
     });
     // add next project to the queue
     if (task.index < projects.length - 1)
-        Q.push({ kind: "project", index : task.index + 1});
+        Qapi.push({ kind: "project", index : task.index + 1});
 }
+
+/** Clones the project into a temp folder */
+function TaskClone(task, callback) {
+    // first create the temp directory in which we will clone the file
+    tmp.dir({
+        unsafeCleanup : true
+    }, (err, path, cleanupCallback) => {
+        let project = task.project;
+        if (err)
+            return ProjectFatalError(callback, project, err, "Unable to create temporary directory to clone the repository into");
+        // update the project object with the data and the callback
+        project.localDir = path;
+        project.tempCleanup = cleanupCallback;
+        project.cloneUrl = "https://github.com/" + project.info.fullName;
+        // now we need to clone the project into the given path
+        console.log("cloning project " + project.info.fullName + " into " + project.localDir);
+        child_process.exec("GIT_TERMINAL_PROMPT=0 git clone " + project.cloneUrl + " " + project.localDir, (error, cout, cerr) => {
+            if (error) 
+                return ProjectFatalError(callback, project, error, "Unable to clone the project");
+            // when the project has been cloned, 
+            console.log("project " + project.info.fullName + " successfully cloned into " + project.localDir);
+            // TODO TODO TODO TODO TODO TODO TODO TODO TODO
+            callback();
+        });
+    });
+}
+
 
 /** When checking a branch, we always perform the check to see if the commit has changed.
  */
@@ -365,7 +431,7 @@ function TaskBranch(task, callback) {
                 console.log("project " + project.info.fullName + " branch " + branch.name + " not changed, skipping...");
             } else {
                 project.branches[branch.name] = branch;
-                AddProjectTask(project, {
+                AddProjectTask(Qapi, project, {
                     kind : "commit",
                     hash : branch.commit,
                     project : project
@@ -408,7 +474,7 @@ function TaskCommit(task, callback) {
             // Enqueue all parent commits
             commit.parents = [];
             for (parent of result.parents) {
-                AddProjectTask(project, {
+                AddProjectTask(Qapi, project, {
                     kind : "commit",
                     hash : parent.sha,
                     project : project
@@ -440,7 +506,7 @@ function TaskCommit(task, callback) {
                         continue;
                     fileInfo.hash = f.sha
                     // enque the task to download the file 
-                    AddProjectTask(project, {
+                    AddProjectTask(Qdownload, project, {
                         kind : "snapshot",
                         project : project,
                         hash : f.sha,

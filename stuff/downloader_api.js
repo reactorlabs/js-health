@@ -312,8 +312,11 @@ function TaskProject(task, callback) {
                 i.open_issues_count = result.open_issues_count;
                 i.default_branch = result.default_branch;
                 // if the project is fork and we have parent, store its id
-                if (result.parent !== undefined)
-                    i.parent = result.parent.id;
+                if (result.parent !== undefined) {
+                    i.parent = {
+                        id : result.parent.id,
+                        fullName : result.parent.full_name
+                    };
                 i.created_at = result.created_at;
                 if (i.updated_at === result.updated_at && i.pushed_at === result.pushed_at) {
                     console.log("project " + project.info.fullName + " did not change, skipping...");

@@ -10,7 +10,8 @@
             "request": "launch",
             "name": "Launch Program",
             "program": "${workspaceRoot}/index.js",
-            "args": [ "download-gh", "/data/googlejs/topStars", "1000", "20"]
+            "args": [ "download-gh", "/home/peta/projects-js.csv", "/home/peta/jsdownload", "/home/peta/githubtokens.json", "30"]
+            //"args": [ "filter", "/home/peta/projects.csv", "/home/peta/projects-js.csv", "JavaScript", "CoffeeScript", "TypeScript"]            
         }
     ]
 

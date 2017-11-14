@@ -10,16 +10,12 @@ const mkdirp = require("mkdirp")
  */
 function mkdir(where, name, callback) {
     fs.mkdir(where + "/" + name, (err) => {
-        if (err != "EEXIST")
+        if (err && err.code != "EEXIST")
             callback(err);
         else 
             callback(null);
     });
 }
-
-
-// TODO get repositories 
-
 
 module.exports = {
 
@@ -27,22 +23,24 @@ module.exports = {
 
     },
 
-    download : function(apiTokens) {
-        let numStrides = 100;
-        let strideIndex = 0;
-        let projectsFile = "/home/peta/projects-js.csv";
-        projectOutputDir = "/home/peta/jsdownload/projects";
-        snapshotOutputDir = "/home/peta/jsdownload/files";
+    download : function() {
+        let projectsFile = process.argv[3];
+        let outputDir = process.argv[4];
+        let apiTokens = process.argv[5];
+        let numWorkers = process.argv[6];
 
+        projectOutputDir = outputDir + "/projects";
+        snapshotOutputDir = outputDir + "/files";
 
         console.time("all");
         mkdirp.sync(projectOutputDir);
         mkdirp.sync(snapshotOutputDir);
 
         apiTokens_ = apiTokens;
+        console.log("Loading Github API Tokens from " + apiTokens)
+        apiTokens_ = JSON.parse(fs.readFileSync(apiTokens));
         console.log("Initialized with " + apiTokens_.length + " Github API tokens...");
-        console.log("Loading projects - stride ", strideIndex, "/", numStrides);
-
+        console.log("Loading projects...");
         projects = []
 
         let input = readline.createInterface({
@@ -50,11 +48,11 @@ module.exports = {
         });
         input.on("line", (line) => {
             let fullName = line.split(",")[0]
-            projects.append(fullName);
+            projects.push(fullName);
         });
         input.on("close", () => {
-            console.log("Loaded " + projects.length + " projects. Starting the worker's queue");
-            Q = async.queue(Task, 500);
+            console.log("Loaded " + projects.length + " projects. Starting the queue, workers: " + numWorkers);
+            Q = async.queue(Task, numWorkers);
             // queue the first project
             Q.push({ kind: "project", index: 0})
             // when the queue is done, exit
@@ -134,14 +132,13 @@ function ProjectNameToPath(fullName) {
     }
     return path;
 }
+
 /** Initializes the path where to store project information. */
 function InitializeProjectPath(project, callback) {
-    // if the project path exists, then we do not need to do anything, call the callback immediately
-    if (project.path) {
+    // if the project path exists, which means if the project has been read from disk then we don't need to do anything
+    if (project.id) {
         callback(null);
     } else {
-        project.fullNamePath = ProjectNameToPath(project.info.fullName);
-        project.pathPrefix = project.fullNamePath.substr(0,2);
         mkdir(projectOutputDir, project.pathPrefix, (err) => {
             if (err) {
                 ProjectFatalError(callback, project, err, " Unable to create the project folder");
@@ -153,8 +150,6 @@ function InitializeProjectPath(project, callback) {
                     ProjectFatalError(callback, project, err, " Unable to create the project folder");
                     return;
                 }
-                // set the project path, and call itself again, this time actually storing the file
-                project.path = projectOutputDir + "/" + project.pathPrefix + "/" + project.fullNamePath;
                 callback();
             });
         });
@@ -186,7 +181,7 @@ function SaveProjectInfo(project, callback) {
         // otherwise unlink the errors file
         fs.unlink(project.patg + "/errors.json", (err) => {
             // TODO what to do if we have error
-            if (err)
+            if (err && err.code !== "ENOENT")
                 ProjectFatalError(callback, project, err, "Unable to delete the errors.json file");
             else
                 saveInfo();
@@ -223,7 +218,10 @@ function AddProjectTask(project, task) {
  */
 function EndProjectTask(project, callback) {
     if (--project.tasks == 0) {
-        console.log("Closing project " + project.info.fullName);
+        if (project.errors.length > 0)
+            console.log("Closing project " + project.info.fullName + ", errors: " + project.errors.length);
+        else
+            console.log("Closing project " + project.info.fullName);
         SaveProjectInfo(project, callback);
     } else {
         callback();
@@ -245,7 +243,7 @@ function ProjectFatalError(callback, project, err, reason) {
 /** Appends the given error to the list of errors within the project. All errors are saved at the end when all project tasks have finished.
  */
 function AddProjectError(callback, project, kind, hash, reason) {
-    project.errors.append({
+    project.errors.push({
         kind: kind,
         hash: hash
     })
@@ -268,57 +266,72 @@ function TaskProject(task, callback) {
         // errors that happened during processing of the project
         errors : []
     };
-    if (task.id !== undefined) {
-        // TODO load the project information from disk and specify task's URL 
-    } else {
-        // make sure that 
-    }
     // now get the metadata for the project 
     project.url = "http://api.github.com/repos/" + projects[task.index];
-    console.log("opening project " + projects[task.index]);
-    APIRequest(project.url,
-        (error, response, result) => {
-            // This is ok, just means that the project was not found, i.e. has already been deleted, or made private
-            if (response.statusCode == 404) {
-                EndProjectTask(project, callback)
-                return;
-            }
-            let i = project.info
-            // fill in the task project
-            i.id = result.id;
-            i.name = result.name
-            //i.fullName = result.fullName;
-            i.description = result.description;
-            i.ownerId = result.owner.id;
-            i.fork = result.fork;
-            // TODO determine if the project has changed and do not do the commits in that case
-            i.created_at = result.created_at;
-            i.updated_at = result.updated_at;
-            i.pushed_at = result.pushed_at;
-            i.size = result.size;
-            i.forks_count = result.forks_count;
-            i.stargazers_count = result.stargazers_count;
-            i.watchers_count = result.watchers_count;
-            i.language = result.language;
-            i.has_issues = result.has_issues;
-            i.open_issues_count = result.open_issues_count;
-            i.default_branch = result.default_branch;
-            // if the project is fork and we have parent, store its id
-            if (result.parent !== undefined)
-                i.parent = result.parent.id;
-            // now we must make sure that the project path exists before we can start processing the branches
-            InitializeProjectPath(project, () => {
-                // mark the default branch for analysis
-                AddProjectTask(project, {
-                    kind : "branch",
-                    branch : i.default_branch,
-                    project : project
-                });
-                // save the project info, which also executes our callback
-                EndProjectTask(project, callback);
-            });
+    project.fullNamePath = ProjectNameToPath(project.info.fullName);
+    project.pathPrefix = project.fullNamePath.substr(0,2);
+    project.path = projectOutputDir + "/" + project.pathPrefix + "/" + project.fullNamePath;
+    // load the project from disk, if we have it
+    fs.readFile(project.path + "/project.json", (err, data) => {
+        if (err === null) {
+            let x = JSON.parse(data);
+            project.info = x.info;
+            project.branches = x.branches;
+            console.log("project " + project.info.fullName + " already found on disk...");
+            // technically we can call callback & return here
         }
-    );
+        console.log("opening project " + projects[task.index]);
+        APIRequest(project.url,
+            (error, response, result) => {
+                // This is ok, just means that the project was not found, i.e. has already been deleted, or made private
+                if (response.statusCode == 404) {
+                    // TODO if we have already seen the project, we might want to do something with it
+                    EndProjectTask(project, callback)
+                    return;
+                }
+                let i = project.info
+                // fill in the task project
+                i.id = result.id;
+                i.name = result.name
+                i.fullName = result.full_name;
+                //i.fullName = result.fullName;
+                i.description = result.description;
+                i.ownerId = result.owner.id;
+                i.fork = result.fork;
+                i.size = result.size;
+                i.forks_count = result.forks_count;
+                i.stargazers_count = result.stargazers_count;
+                i.watchers_count = result.watchers_count;
+                i.language = result.language;
+                i.has_issues = result.has_issues;
+                i.open_issues_count = result.open_issues_count;
+                i.default_branch = result.default_branch;
+                // if the project is fork and we have parent, store its id
+                if (result.parent !== undefined)
+                    i.parent = result.parent.id;
+                i.created_at = result.created_at;
+                if (i.updated_at === result.updated_at && i.pushed_at === result.pushed_at) {
+                    console.log("project " + project.info.fullName + " did not change, skipping...");
+                    EndProjectTask(project, callback);
+                } else { 
+                    i.updated_at = result.updated_at;
+                    i.pushed_at = result.pushed_at;
+                        // now we must make sure that the project path exists before we can start processing the branches
+                    InitializeProjectPath(project, () => {
+                        // mark the default branch for analysis
+                        AddProjectTask(project, {
+                            kind : "branch",
+                            branch : i.default_branch,
+                            project : project
+                        });
+                        // save the project info, which also executes our callback
+                        EndProjectTask(project, callback);
+                    });
+                }
+            }
+        );
+    });
+    // add next project to the queue
     if (task.index < projects.length - 1)
         Q.push({ kind: "project", index : task.index + 1});
 }
@@ -340,12 +353,16 @@ function TaskBranch(task, callback) {
                 name : result.name,
                 commit : result.commit.sha
             }
-            project.branches[branch.name] = branch;
-            AddProjectTask(project, {
-                kind : "commit",
-                hash : branch.commit,
-                project : project
-            })
+            if (project.branches[branch.name] !== undefined && project.branches[branch.name].commit === branch.commit) {
+                console.log("project " + project.info.fullName + " branch " + branch.name + " not changed, skipping...");
+            } else {
+                project.branches[branch.name] = branch;
+                AddProjectTask(project, {
+                    kind : "commit",
+                    hash : branch.commit,
+                    project : project
+                })
+            }
             // output the branch info
             EndProjectTask(project, callback);
         }

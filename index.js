@@ -9,8 +9,8 @@ const test_runner = require("./stuff/test_runner.js");
 const download_all = require("./stuff/download_all.js");
 const sift = require("./stuff/type_sorter.js");
 const downloader_api = require("./stuff/downloader_api.js");
-const filter = require("./stuff/projects_filter.js")
-
+const filter = require("./stuff/projects_filter.js");
+const downloader = require("./stuff/downloader.js");
 apiTokens = [
     "36df491663476ff4a13d53188253d43b5ef6d3c9",
     "38b337acfbf2bf1b3f463b3740043af40cccc203",
@@ -74,7 +74,8 @@ function main() {
             downloader_api.download(apiTokens);
             return;
         case "download":
-            download_all.download(apiTokens);
+            //download_all.download(apiTokens);
+            downloader.download();
             return;
         case "git_js":
             download_all.git_js(apiTokens);

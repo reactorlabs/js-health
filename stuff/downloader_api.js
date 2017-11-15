@@ -3,6 +3,8 @@ const request = require("request")
 const fs = require("fs");
 const readline = require("readline")
 const mkdirp = require("mkdirp")
+const tmp = require("tmp");
+const child_process = require("child_process");
 
 // helpers which should eventually go to utils
 
@@ -29,6 +31,9 @@ module.exports = {
         let apiTokens = process.argv[5];
         let numApiWorkers = process.argv[6];
         let numDownloadWorkers = 300;
+        let numProcessWorkers = 100;
+
+        let useGit = true;
 
         projectOutputDir = outputDir + "/projects";
         snapshotOutputDir = outputDir + "/files";
@@ -57,12 +62,18 @@ module.exports = {
             Qapi = async.queue(ApiTask, numApiWorkers);
             console.log("Starting the download queue, workers: " + numDownloadWorkers);
             Qdownload = async.queue(DownloadTask, numDownloadWorkers);
+            console.log("Starting the process queue, workers: " + numProcessWorkers);
+            Qprocess = async.queue(ProcessTask, numProcessWorkers);
             // queue the first project
-            Qapi.push({ kind: "project", index: 0})
+            if (useGit)
+                Qprocess.push({ kind: "clone", index: 0})
+            else
+                Qapi.push({ kind: "project", index: 0})
             // when all the queues are drained, we can exit
             let canExit = () => {
                 if (Qapi.running() == 0 && Qapi.empty() &&
-                    Qdownload.running() == 0 && Qdownload.empty()) {
+                    Qdownload.running() == 0 && Qdownload.empty() &&
+                    Qprocess.running() == 0 && Qprocess.empty()) {
                     console.timeEnd("all");
                     console.log("KTHXBYE");
                     process.exit();
@@ -74,12 +85,13 @@ module.exports = {
             Qdownload.drain = canExit;
             setInterval(() => {
                 console.log("Qa: " + Qapi.running() + "/" + Qapi.length() + 
-                         ", Qd: " + Qdownload.running() + "/" + Qdownload.length() + 
-                         ", T: " + (++stats_time) + 
-                         ", R: " + stats_requests + "(" + stats_retries + ")" + 
-                         ", P : " + stats_projects + 
-                         ", F: " + stats_files + 
-                         ", S: " + stats_snapshots);
+                          ", Qp: " + Qprocess.running() + "/" + Qprocess.length() + 
+                          ", Qd: " + Qdownload.running() + "/" + Qdownload.length() + 
+                           ", T: " + (++stats_time) + 
+                           ", R: " + stats_requests + "(" + stats_retries + ")" + 
+                           ", P : " + stats_projects + 
+                           ", F: " + stats_files + 
+                           ", S: " + stats_snapshots);
             }, 1000)
         });
     }
@@ -99,6 +111,9 @@ let projects = [];
 let Qapi = null;
 /** Queue for downloads */
 let Qdownload = null;
+
+/** Queue for spawning processes */
+let Qprocess = null;
 
 /** Trampoline that performs the appropriate task from the main queue.
  */
@@ -124,6 +139,20 @@ function DownloadTask(task, callback) {
             return TaskSnapshot(task, callback);
         default:
             console.log("Invalid download task " + task.kind);
+            callback();
+    }
+}
+
+function ProcessTask(task, callback) {
+    switch (task.kind) {
+        case "clone":
+            return TaskGitClone(task, callback);
+        case "branch":
+            return TaskGitBranch(task, callback);
+        case "commit":
+            return TaskGitCommit(task, callback);
+        default:
+            console.log("Invalid api task " + task.kind);
             callback();
     }
 }
@@ -231,11 +260,11 @@ function SaveCommit(project, commit, callback) {
     let subdir = commit.hash.substr(0, 2);
     mkdir(project.path, subdir, (err) => {
         if (err) {
-            AddProjectError(callback, project, "commit", commit.hash, "Unable to create commit folder");
+            AddProjectError(callback, project, "commit", commit.hash, "", "Unable to create commit folder");
         } else { 
             fs.writeFile(project.path + "/" + subdir + "/" + commit.hash + ".json", JSON.stringify(commit), (err) => {
                 if (err) 
-                    AddProjectError(callback, project, "commit", commit.hash, "Unable to create commit json file");
+                    AddProjectError(callback, project, "commit", commit.hash, "", "Unable to create commit json file");
                 else
                     EndProjectTask(project, callback);
             });
@@ -248,6 +277,7 @@ function AddProjectTask(queue, project, task) {
     project.tasks++;
     queue.unshift(task);
 }
+
 
 /** When a task that belongs to certain project is finished, we decrement the number of active tasks for that project. When this number gets to zero, we know we have analyzed the project completely and therefore can store the project information.
  */
@@ -284,22 +314,24 @@ function ProjectFatalError(callback, project, err, reason) {
 
 /** Appends the given error to the list of errors within the project. All errors are saved at the end when all project tasks have finished.
  */
-function AddProjectError(callback, project, kind, hash, reason) {
+function AddProjectError(callback, project, kind, hash, url, reason) {
     project.errors.push({
         kind: kind,
-        hash: hash
+        hash: hash,
+        url: url, 
+        reason : reason
     })
     EndProjectTask(project, callback);
 }
 
 
-/**  */
-function TaskProject(task, callback) {
+/** Initializes the project information. */
+function InitializeProject(id, callback) {
     // create the project
     let project = {
         ok : true, // if the project is not ok, there is no point in executing more of its tasks... 
         info : {
-            fullName : projects[task.index]
+            fullName : projects[id]
         },
         branches : {},
         commits : {},
@@ -309,7 +341,7 @@ function TaskProject(task, callback) {
         errors : []
     };
     // now get the metadata for the project 
-    project.url = "http://api.github.com/repos/" + projects[task.index];
+    project.url = "http://api.github.com/repos/" + project.info.fullName;
     project.fullNamePath = ProjectNameToPath(project.info.fullName);
     project.pathPrefix = project.fullNamePath.substr(0,2);
     project.path = projectOutputDir + "/" + project.pathPrefix + "/" + project.fullNamePath;
@@ -324,13 +356,14 @@ function TaskProject(task, callback) {
             console.log("project " + project.info.fullName + " already found on disk...");
             // technically we can call callback & return here
         }
-        console.log("opening project " + projects[task.index]);
+        console.log("opening project " + project.info.fullName);
         APIRequest(project.url,
             (error, response, result) => {
                 // This is ok, just means that the project was not found, i.e. has already been deleted, or made private
                 if (response.statusCode == 404) {
                     // TODO if we have already seen the project, we might want to do something with it
-                    EndProjectTask(project, callback)
+                    console.log(" project " + project.info.fullName + " no longer available")
+                    callback(project, false);
                     return;
                 }
                 let i = project.info
@@ -359,54 +392,73 @@ function TaskProject(task, callback) {
                 i.created_at = result.created_at;
                 if (i.updated_at === result.updated_at && i.pushed_at === result.pushed_at) {
                     console.log("project " + project.info.fullName + " did not change, skipping...");
-                    EndProjectTask(project, callback);
+                    callback(project, false);
                 } else { 
                     i.updated_at = result.updated_at;
                     i.pushed_at = result.pushed_at;
-                        // now we must make sure that the project path exists before we can start processing the branches
+                    // now we must make sure that the project path exists before we can start processing the branches
                     InitializeProjectPath(project, () => {
-                        // mark the default branch for analysis
-                        AddProjectTask(Qapi, project, {
-                            kind : "branch",
-                            branch : i.default_branch,
-                            project : project
-                        });
-                        // save the project info, which also executes our callback
-                        EndProjectTask(project, callback);
+                        callback(project, true);
                     });
                 }
             }
         );
+    });
+}
+
+/**  */
+function TaskProject(task, callback) {
+    InitializeProject(task.index, (project, analyze) => {
+        if (analyze) {
+            // mark the default branch for analysis
+            AddProjectTask(Qapi, project, {
+                kind : "branch",
+                branch : i.default_branch,
+                project : project
+            });
+        }
+        EndProjectTask(project, callback);
     });
     // add next project to the queue
     if (task.index < projects.length - 1)
         Qapi.push({ kind: "project", index : task.index + 1});
 }
 
-/** Clones the project into a temp folder */
-function TaskClone(task, callback) {
-    // first create the temp directory in which we will clone the file
-    tmp.dir({
-        unsafeCleanup : true
-    }, (err, path, cleanupCallback) => {
-        let project = task.project;
-        if (err)
-            return ProjectFatalError(callback, project, err, "Unable to create temporary directory to clone the repository into");
-        // update the project object with the data and the callback
-        project.localDir = path;
-        project.tempCleanup = cleanupCallback;
-        project.cloneUrl = "https://github.com/" + project.info.fullName;
-        // now we need to clone the project into the given path
-        console.log("cloning project " + project.info.fullName + " into " + project.localDir);
-        child_process.exec("GIT_TERMINAL_PROMPT=0 git clone " + project.cloneUrl + " " + project.localDir, (error, cout, cerr) => {
-            if (error) 
-                return ProjectFatalError(callback, project, error, "Unable to clone the project");
-            // when the project has been cloned, 
-            console.log("project " + project.info.fullName + " successfully cloned into " + project.localDir);
-            // TODO TODO TODO TODO TODO TODO TODO TODO TODO
-            callback();
-        });
+/** Clones the project into a temp folder.
+ */
+function TaskGitClone(task, callback) {
+    InitializeProject(task.index, (project, analyze) => {
+        if (analyze) {
+            // first create the temp directory in which we will clone the file
+            tmp.dir({
+                unsafeCleanup : true
+            }, (err, path, cleanupCallback) => {
+                if (err)
+                    return ProjectFatalError(callback, project, err, "Unable to create temporary directory to clone the repository into");
+                // update the project object with the data and the callback
+                project.localDir = path;
+                project.tempCleanup = cleanupCallback;
+                project.cloneUrl = "https://github.com/" + project.info.fullName;
+                // now we need to clone the project into the given path
+                console.log("cloning project " + project.info.fullName + " into " + project.localDir);
+                child_process.exec("GIT_TERMINAL_PROMPT=0 git clone " + project.cloneUrl + " " + project.localDir, (error, cout, cerr) => {
+                    if (error) 
+                        return ProjectFatalError(callback, project, error, "Unable to clone the project");
+                    // when the project has been cloned, 
+                    console.log("project " + project.info.fullName + " successfully cloned into " + project.localDir);
+                    AddProjectTask(Qprocess, project, {
+                        kind : "branch",
+                        project : project, 
+                        branch : project.info.default_branch
+                    })
+                    EndProjectTask(project, callback);
+                });
+            });
+        }
     });
+    // add next project to the queue
+    if (task.index < projects.length - 1)
+        Qprocess.push({ kind: "clone", index : task.index + 1});
 }
 
 
@@ -419,29 +471,54 @@ function TaskBranch(task, callback) {
         callback();
         return;
     }
-    APIRequest(project.url + "/branches/" + task.branch,
+    let url = project.url + "/branches/" + task.branch
+    APIRequest(url,
         (error, response, result) => {
             if (error) 
-                return AddProjectError(callback, project, "branch", task.branch, "Unable to obtain information for branch " + task.branch);
-            let branch = {
-                name : result.name,
-                commit : result.commit.sha
-            }
-            if (project.branches[branch.name] !== undefined && project.branches[branch.name].commit === branch.commit) {
-                console.log("project " + project.info.fullName + " branch " + branch.name + " not changed, skipping...");
-            } else {
-                project.branches[branch.name] = branch;
-                AddProjectTask(Qapi, project, {
-                    kind : "commit",
-                    hash : branch.commit,
-                    project : project
-                })
-            }
-            // output the branch info
+                return AddProjectError(callback, project, "branch", task.branch, url, "Unable to obtain information for branch " + task.branch);
+            // enqueue the latest commit of the branch
+            AnalyzeBranch(Qapi, project, task.branch, result.commit.sha);
+            // we are done with the branch, close the task
             EndProjectTask(project, callback);
         }
     );
 }
+
+function TaskGitBranch(task, callback) {
+    let project = task.project;
+    let branch = task.branch;
+    child_process.exec("git checkout " + project.info.default_branch, { cwd: project.localDir }, (error, cout, cerr) => {
+        if (error)
+            return ProjectFatalError(callback, project, error, "Unable to checkout main branch " + project.info.default_branch);
+        // now that we have the branch, get its commit
+        child_process.exec("git rev-parse HEAD", { cwd: project.localDir }, (error, cout, cerr) => {
+            if (error)
+                return ProjectFatalError(callback, project, error, "Cannot determine HEAD");
+            // enqueue the latest commit of the branch
+            AnalyzeBranch(Qprocess, project, branch, cout);
+            // we are done with the branch, close the task
+            EndProjectTask(project, callback);
+        });
+    });
+}
+
+function AnalyzeBranch(queue, project, branchName,  commitHash) {
+    let branch = {
+        name : branchName,
+        commit : commitHash
+    }
+    if (project.branches[branch.name] !== undefined && project.branches[branch.name].commit === branch.commit) {
+        console.log("project " + project.info.fullName + " branch " + branch.name + " not changed, skipping...");
+    } else {
+        project.branches[branch.name] = branch;
+        AddProjectTask(queue, project, {
+            kind : "commit",
+            hash : branch.commit,
+            project : project
+        })
+    }
+}
+
 
 function TaskCommit(task, callback) {
     let project = task.project;
@@ -458,10 +535,11 @@ function TaskCommit(task, callback) {
     project.commits[commit.hash] = commit;
     // get information about the commit
 
-    APIRequest(project.url + "/commits/" + commit.hash, 
+    let url = project.url + "/commits/" + commit.hash
+    APIRequest(url, 
         (error, response, result) => {
             if (error) 
-                return AddProjectError(callback, project, "commit", commit.hash, "Unable to obtain information for commit " + commit.hash);
+                return AddProjectError(callback, project, "commit", commit.hash, url, "Unable to obtain information for commit " + commit.hash);
             commit.date = result.commit.author.date;
             commit.message = result.commit.message;
             commit.author = {
@@ -510,7 +588,9 @@ function TaskCommit(task, callback) {
                         kind : "snapshot",
                         project : project,
                         hash : f.sha,
-                        url : f.raw_url 
+                        url : f.raw_url,
+                        commit : commit
+
                     });
                 }
                 // add the fileinfo to the commit files
@@ -522,9 +602,105 @@ function TaskCommit(task, callback) {
     );
 }
 
+function TaskGitCommit(task, callback) {
+    let project = task.project
+    // no need to revisit the commit if we have already scanned it, or we are scanning it right now
+    if (project.commits[task.hash] !== undefined) 
+        return EndProjectTask(project, callback);
+    // otherwise add the commit
+    let commit = {
+        hash : task.hash,
+        files : [],
+        parents : []
+
+    };
+    // get parents for the commit
+    child_process.exec("git rev-list --parents -n 1 " + commit.hash, { cwd: project.localDir, maxBuffer: 1024 * 1024 * 20 }, 
+        (error, cout, cerr) => {
+            if (error) 
+                return AddProjectError(callback, project, "commit", commit.hash,"", "Unable to get parents for commit");
+            // add the parents
+            parents = cout.trim().split(" ");
+            for (let i = 1; i < parents.length; ++i) {
+                AddProjectTask(Qprocess, project, {
+                    kind : "commit",
+                    hash: parents[i],
+                    project : project
+                });
+                commit.parents.push(parents[i]);
+            }
+            // now that the parents were added, get files and add the file changes as well
+            child_process.exec("git diff-tree --no-commit-id -r " + commit.hash, { cwd: project.localDir, maxBuffer: 1024 * 1024 * 20 },
+            (error, cout, cerr) => {
+                if (error)
+                    return AddProjectError(callback, project, "commit", commit.hash, "", "Unable to perform git diff-tree");
+                // otherwise we must parse the output according to git-diff rules (see https://git-scm.com/docs/git-diff-tree)
+                let files = cout.split("\n");
+                for (let line of files) {
+                    if (line == "")
+                        continue;
+                    // get rid of the leading colon and split into columns
+                    line = line.substr(1).split(" ");
+                    let srcMode = line[0];
+                    let dstMode = line[1];
+                    let srcHash = line[2];
+                    let dstHash = line[3];
+                    let status = line[4].split("\t");
+                    let srcPath = status[1];
+                    let filename = srcPath;
+                    status = status[0];
+                    let dstPath = "";
+                    if (line.length == 6) {
+                        dstPath = line[5];
+                        filename = dstPath;
+                    }
+                    // ignore files we do not care about
+                    if (! IsValidFilename(filename))
+                        continue;
+                    // ignore file permissions change
+                    if (srcHash == dstHash && (srcPath == dstPath || dstPath == ""))
+                        continue;
+                    let fileInfo = {
+                        filename : filename,
+                        hash : dstHash
+                    }
+                    if (status == "M") {
+                        fileInfo.status = "modified"
+                    } else if (status == "A") {
+                        fileInfo.status = "created";
+                    } else if (status == "D") {
+                        fileInfo.status = "removed";
+                    } else if (status == "U") {
+                        fileInfo.status = "unmerged";
+                    } else if (status[0] == "C") {
+                        fileInfo.status = "copy-edit";
+                        fileInfo.previous_filename = srcPath;
+                    } else if (status[0] == "R") {
+                        fileInfo.status = "rename-edit";
+                        fileInfo.previous_filename = srcPath;
+                    }
+                    if (fileInfo.status !== "removed" && fileInfo.status !== "renamed") {
+                        AddProjectTask(Qdownload, project, {
+                            kind : "snapshot",
+                            project : project, 
+                            hash : fileInfo.hash,
+                            url : "https://raw.githubusercontent.com/" + project.info.fullName + "/" + commit.hash + "/" + fileInfo.filename,
+                            commit : commit,
+                            line : line
+                        });
+                    }
+                    commit.files.push(fileInfo);
+                }
+                SaveCommit(project, commit, callback);
+            });
+        }
+    );
+
+}
 
 /** Obtain the snapshot of the file. */
 function TaskSnapshot(task, callback) {
+    let project = task.project
     // if the project is not ok, ignore the task
     if (! task.project.ok) {
         callback();
@@ -539,21 +715,21 @@ function TaskSnapshot(task, callback) {
             // if the snapshot does not exist, make first sure that the path exists
             mkdir(snapshotOutputDir, subdir1, (err) => {
                 if (err) 
-                    return AddProjectError(callback, task.project, "snapshot", task.hash, "Unable to create folder for snapshot " + task.hash);
+                    return AddProjectError(callback, task.project, "snapshot", task.hash, task.url, "Unable to create folder for snapshot " + task.hash);
                 mkdir(snapshotOutputDir + "/" + subdir1, subdir2, (err) => {
                     if (err) 
-                        return AddProjectError(callback, task.project, "snapshot", task.hash, "Unable to create folder for snapshot " + task.hash);
+                        return AddProjectError(callback, task.project, "snapshot", task.hash, task.url, "Unable to create folder for snapshot " + task.hash);
                     APIRequest(
                         task.url, 
                         (error, response, result) => {
                             if (error) 
-                                return AddProjectError(callback, task.project, "snapshot", task.hash, "Unable to get snapshot " + task.hash + " from github");
+                                return AddProjectError(callback, project, "snapshot", task.hash, task.url, "Unable to get snapshot " + task.hash + " from github");
                             fs.writeFile(snapshotPath, result, (err) => {
                                 if (err) 
-                                    return AddProjectError(callback, task.project, "snapshot", task.hash, "Unable to store snapshot " + task.hash);
+                                    return AddProjectError(callback, project, "snapshot", task.hash, task.url, "Unable to store snapshot " + task.hash);
                                 ++stats_files;
                                 ++stats_snapshots;
-                                EndProjectTask(task.project, callback);
+                                EndProjectTask(project, callback);
                             });
                         },
                         false // no JSON
@@ -605,6 +781,8 @@ function APIRequest(url, onDone, json = true, retries = 10) {
         // if not proceed as normally
         if (error || response.statusCode != 200) {
             console.log(url + " -- error");
+            if (error === null)
+                error = response.statusCode;
             onDone(error, response, body);
         } else {
             //console.log(url + " -- ok");

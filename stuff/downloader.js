@@ -56,9 +56,13 @@ function CanExit() {
 function Task(task, callback) {
     switch (task.kind) {
         case "project":
-            StartProject(task.index, callback);
+            let name = projects[task.index++];
+            if (task.index < projects.length) 
+                Q.push({ kind: "project", index: task.index});
+            Project.Start(name, callback);
             break;
         case "branch":
+            task.project.analyzeBranch(task.name, callback);
             break;
         default:
             console.error("[ERROR] Invalid task " + task.kind);
@@ -66,23 +70,6 @@ function Task(task, callback) {
     }
 }
 
-function StartProject(index, callback) {
-    let project = new Project(projects[index++]);
-    // schedule next project if there is any
-    if (index < projects.length)
-        Q.push({ kind : "project", index : index});
-    project.loadPreviousResults(() => {
-        project.getMetadata((analyze) => {
-            if (analyze) {
-                project.clone(() => {
-                    project.switchTask({ kind : "branch", name : project.info.default_branch }, callback);
-                });
-            } else {
-                project.endTask(callback);
-            }
-        });
-    });
-}
 
 /** Wrapper around calls to Github. Manages github api tokens and provides api and normal HTTP get wrapper methods with retries and basic error checking. */
 class Github {
@@ -186,6 +173,42 @@ class Git {
 }
 
 class Project {
+
+    /** Task that starts analysis of a project. When done, calls the given callback. */
+    static Start(projectName, callback) {
+        let project = new Project(projectName);
+        project.loadPreviousResults(() => {
+            project.getMetadata((analyze) => {
+                if (analyze) {
+                    project.clone(() => {
+                        project.switchTask({ kind : "branch", name : project.info.default_branch }, callback);
+                    });
+                } else {
+                    project.endTask(callback);
+                }
+            });
+        });
+    }
+
+    /** Task that starts analyzing given branch in the specified project. */
+    analyzeBranch(name, callback) {
+        let project = this; 
+        // get the latest commit of the branch
+        project.getLatestBranchCommit(name, (hash) => {
+            // if the branch has already been analyzed at this commit, no need to reanalyze
+            if (project.branches[name] == hash) 
+                return project.endTask(callback);
+            // othwreise note that the commit is analyzed and switch task
+            project.branches[name] = hash;
+            project.switchTask({ kind : "commit", hash : hash});
+        });
+    }
+
+    /** Analyzes the given commit. */
+    analyzeCommit(hash, callback) {
+
+    }
+
     constructor(name) {
         this.url = "https://github.com/" + name;
         this.path = Project.GetPath_(name);

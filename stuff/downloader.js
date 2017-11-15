@@ -64,6 +64,10 @@ function Task(task, callback) {
         case "branch":
             task.project.analyzeBranch(task.name, callback);
             break;
+        case "commit":
+            task.project.analyzeCommit(task.hash, callback);
+            break;
+
         default:
             console.error("[ERROR] Invalid task " + task.kind);
             callback();
@@ -177,10 +181,15 @@ class Project {
     /** Task that starts analysis of a project. When done, calls the given callback. */
     static Start(projectName, callback) {
         let project = new Project(projectName);
-        project.loadPreviousResults(() => {
-            project.getMetadata((analyze) => {
+        project.loadPreviousResults((error) => {
+            // error should always be null
+            project.getMetadata((error, analyze) => {
+                if (error)
+                    return project.fatalError(error, callback, "Cannot obtain project metadata from github");
                 if (analyze) {
-                    project.clone(() => {
+                    project.clone((error) => {
+                        if (error)
+                            return project.fatalError(error, callback, "Unable to clone project");
                         project.switchTask({ kind : "branch", name : project.info.default_branch }, callback);
                     });
                 } else {
@@ -194,7 +203,9 @@ class Project {
     analyzeBranch(name, callback) {
         let project = this; 
         // get the latest commit of the branch
-        project.getLatestBranchCommit(name, (hash) => {
+        project.getLatestBranchCommit(name, (error, hash) => {
+            if (error)
+                return project.fatalError(error, callback, "Unable to obtain latest commit for branch " + name);
             // if the branch has already been analyzed at this commit, no need to reanalyze
             if (project.branches[name] == hash) 
                 return project.endTask(callback);
@@ -206,6 +217,9 @@ class Project {
 
     /** Analyzes the given commit. */
     analyzeCommit(hash, callback) {
+        let project = this;
+        let commit = new Commit(hash);
+
 
     }
 
@@ -221,6 +235,8 @@ class Project {
         this.time = {
             created : new Date().getTime() / 1000
         }
+        // list of commits 
+        this.commits = {}
         // increase the number of opened projects
         ++Project.Opened; 
     }
@@ -272,7 +288,7 @@ class Project {
         console.log("[INFO] Project: " + this.info.full_name + ": " + what);
     }
 
-    /** If the project has already been analyzed, fetches the project metadata from disk which together with the bnew fetch of the metadata quickly determines if the project needs to be reanalyzed again. */
+    /** If the project has already been analyzed, fetches the project metadata from disk which together with the new fetch of the metadata quickly determines if the project needs to be reanalyzed again. */
     loadPreviousResults(callback) {
         let project = this;
         fs.readFile(project.path +"/project.json", (err, data) => {
@@ -285,7 +301,8 @@ class Project {
                 // mark the project as incremental analysis because we already have previous results
                 project.incremental = true;
             }
-            callback();
+            // not being able to load previous results is not an error in itself
+            callback(null);
         });
     }
 
@@ -295,7 +312,7 @@ class Project {
         let project = this;
         Github.APIRequest("http://api.github.com/repos/" + project.info.full_name, (error, response, result) => {
             if (error)
-                return project.fatalError(error, callback, "Cannot obtain project metadata from github");
+                return callback(error, false);
             let i = project.info;
             // fill in the task project
             i.id = result.id;
@@ -323,11 +340,11 @@ class Project {
             // check if the project has changed since last time we have seen it, and if so, 
             if (i.updated_at === result.updated_at && i.pushed_at === result.pushed_at) {
                 console.log("project " + project.info.fullName + " did not change, skipping...");
-                callback(false);
+                callback(null, false);
             } else { 
                 i.updated_at = result.updated_at;
                 i.pushed_at = result.pushed_at;
-                callback(true);
+                callback(null, true);
             }
         });
     }
@@ -338,22 +355,35 @@ class Project {
         let project = this;
         tmp.dir({ unsafeCleanup: true }, (err, path, cleanupCallback) => {
             if (err) 
-                return project.fatalError(err, callback, "Unable to create temporary directory to clone the project");
+                return callback("Unable to create temporary directory to clone the project");
             project.localDir = path;
             project.localDirCleanup = cleanupCallback;
             project.log("Cloning into " + project.localDir);
             // do the git clone
             Git.Clone(project, (error, cout, cerr) => {
                 if (error)
-                    return project.fatalError(err, callback, "Unable to clone project");
+                    return callback("unable to clone project");
                 // record the time at which the project was cloned
                 project.time.cloned = new Date().getTime() / 1000;
                 project.log("Cloned");
                 // call the callback
-                callback();
+                callback(null);
             })
         });
     }
+
+    getLatestBranchCommit(branchName, callback) {
+        let project = this;
+        Git.Query(project, "git checkout " + branchName, (error, cout, cerr) => {
+            if (error)
+                return callback("Unable to checkout branch " + branchName, null);
+            Git.Query(project, "git rev-parse HEAD", (error, cout, cerr) => {
+                if (error)
+                    return callback("Unable to parse latest branch commit");
+                callback(null, cout.trim());
+            });
+        });
+    } 
 
     /** If the project was cloned, deletes the temporary folder. */
     cleanup_() {
@@ -414,19 +444,46 @@ Project.Closed = 0;
 Project.Errors = 0;
 
 class Commit {
-    constructor(project, hash) {
-        this.hash = hash;
-        this.tasks = 1;
-        this.project_ = project;
-        this.path = outputDir + "/commits/" + hash.substr(0, 3) + "/" + hash.substr(3, 3) + "/" + hash;
+
+    /** Task that analyzes the provided commit for given project.
+     */
+    static Analyze(project, commitHash, callback) {
+        let commit = new Commit(commitHash);
+        commit.loadPreviousResults((error) => {
+            // if the commit is loaded, we are done with it and do not even need to recurse into its parents
+            if (commit.loaded)
+                return callback();
+            // otherwise we fill in the commits 
+        })
+
     }
 
 
+    constructor(hash) {
+        this.path = outputDir + "/commits/" + hash.substr(0, 3) + "/" + hash.substr(3, 3) + "/" + hash;
+        this.files = []
+        this.parents = []
+        this.info = {
+            hash : hash
+        }
+        // number of tasks depending on the commit 
+        this.tasks = 1;
+    }
 
-
-
-
-
+    loadPreviousResults() {
+        let commit = this;
+        fs.readFile(commit.path, (err, data) => {
+            if (! err) {
+                let x = JSON.parse(data);
+                commit.files = x.files;
+                commit.parents = x.parents;
+                commit.info = x.info;
+                commit.loaded = true;
+            }
+            // not being able to load commit does not mean 
+            callback(null);
+        })
+    }
 
 }
 

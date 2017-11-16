@@ -92,40 +92,40 @@ var self = module.exports = {
         var testfile = "/testlengths.csv";
         var currentdir = process.cwd() + testfile;
 
-	if (utils.isFile(currentdir)) {
-	    fs.unlinkSync(currentdir);
+	    if (utils.isFile(currentdir)) {
+	        fs.unlinkSync(currentdir);
     	} 
 
-	let entries = [];
-        if (process.argv.length !== 5) {
-            module.exports.help();
-            console.log("Invalid number of arguments for topStars action");
-            process.exit(-1);
-        }
-        let output = process.argv[3];
-        let num = Number.parseInt(process.argv[4]);
-        let projects = utils.listProjects(output, num);
-        let success = 0;
-        let i = 0;
-        for (let p of projects) {
-            analyzeProject(p);
-	    var testresult = doRunTests(p, d);
-	    if (testresult[1]) {
-	        entries.push([p.path, testresult[1]]);
-	    }
-            if (testresult[0])
-                ++success;
-            ++i;
-            console.log(">>> Analyzed " + i + " projects, successful tests " + success);
-        }
+	    let entries = [];
+            if (process.argv.length !== 5) {
+                module.exports.help();
+                console.log("Invalid number of arguments for topStars action");
+                process.exit(-1);
+            }
+            let output = process.argv[3];
+            let num = Number.parseInt(process.argv[4]);
+            let projects = utils.listProjects(output, num);
+            let success = 0;
+            let i = 0;
+            for (let p of projects) {
+                analyzeProject(p);
+	            var testresult = doRunTests(p, d);
+	        if (testresult[1]) {
+	            entries.push([p.path, testresult[1]]);
+	        }
+                if (testresult[0])
+                    ++success;
+                    ++i;
+                    console.log(">>> Analyzed " + i + " projects, successful tests " + success);
+            }
 
-	if (d) {
-	    entries.sort(function(a, b) { return a[1] > b[1] ? 1 : -1; });
-	    for (let e of entries) {
-		    console.log(e);
-	        fs.appendFileSync(currentdir, e.toString() + "\n");
+	    if (d) {
+	        entries.sort(function(a, b) { return a[1] > b[1] ? 1 : -1; });
+	        for (let e of entries) {
+		        console.log(e);
+	            fs.appendFileSync(currentdir, e.toString() + "\n");
+	        }
 	    }
-	}
     },
 
     timeTests: function() {
@@ -198,34 +198,37 @@ function doRunTests(p, d) {
         if (p.npmTest) {
             console.log("  npm test")
             try {
-	        start = new Date();
+	            start = new Date();
                 child_process.execSync("npm test", { cwd: p.path, timeout: 600000 });
-		end = new Date();
+		        end = new Date();
                 return [true, end - start];
             } catch (e) {
-                console.log("    error running the tests, or non-zero exit");
+                console.log("    npm test -- error or non-zero exit:");
+                console.log(e.stack);
             }
         }
         if (p.gulpTest) {
             console.log("  gulp test");
             try {
-		start = new Date();
+		        start = new Date();
                 child_process.execSync("gulp test", { cwd: p.path, timeout: 600000 });
                 end = new Date();
-		return [true, end - start];
+		        return [true, end - start];
             } catch (e) {
-                console.log("    error running the tests, or non-zero exit");
+                console.log("    gulp test -- error or non-zero exit:");
+                console.log(e.stack);
             }
         }
         if (p.gruntTest) {
             console.log("  grunt test");
             try {
-		start = new Date();
+		        start = new Date();
                 child_process.execSync("grunt test", { cwd: p.path, timeout: 600000 });
                 end = new Date();
-		return [true, end - start];
+		        return [true, end - start];
             } catch (e) {
-                console.log("    error running the tests, or non-zero exit");
+                console.log("    grunt test -- error or non-zero exit:");
+                console.log(e.stack);
             }
         }
     }

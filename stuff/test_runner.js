@@ -204,7 +204,7 @@ function doRunTests(p, d) {
                 return [true, end - start];
             } catch (e) {
                 console.log("    npm test -- error or non-zero exit:");
-                console.log(e.stack);
+                console.log(e.message);
             }
         }
         if (p.gulpTest) {
@@ -216,7 +216,7 @@ function doRunTests(p, d) {
 		        return [true, end - start];
             } catch (e) {
                 console.log("    gulp test -- error or non-zero exit:");
-                console.log(e.stack);
+                console.log(e.message);
             }
         }
         if (p.gruntTest) {
@@ -228,7 +228,7 @@ function doRunTests(p, d) {
 		        return [true, end - start];
             } catch (e) {
                 console.log("    grunt test -- error or non-zero exit:");
-                console.log(e.stack);
+                console.log(e.message);
             }
         }
     }

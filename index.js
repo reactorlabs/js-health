@@ -56,7 +56,6 @@ function help() {
 }
 
 function main() {
-    console.log("OH HAI CAN I HAZ NODE?")
     if (process.argv.length <= 2) {
         help();
         console.log("Invalid usage, specify the action");
@@ -99,7 +98,7 @@ function main() {
             process.exit(-1);
     }
 
-    console.log("KTHXBYE");
+    console.log("Done.");
     process.exit();
 }
 

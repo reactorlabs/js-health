@@ -11,5 +11,5 @@ download() {
 # Test the downloaded projects
 # Usage: source little_benchmark.sh; run
 run() {
-  node index.js timeTests $folder 102;
+  node index.js timeTests $folder 1500;
 }

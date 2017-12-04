@@ -185,6 +185,7 @@ function doRunTests(p, d) {
         if (!p.npm) {
             console.log("  !!! not an NPM project");
         } else {
+	/** Downloads dependencies into node_modules folder 
             console.log("  running npm install...");
 	    try {
             	child_process.execSync("npm install", { cwd : p.path, timeout: 600000});
@@ -194,6 +195,7 @@ function doRunTests(p, d) {
 		console.log("  Resuming tests...");
 		return [false, false];
 	    }
+	*/
         }
         if (p.npmTest) {
             console.log("  npm test")

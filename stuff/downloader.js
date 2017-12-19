@@ -119,9 +119,9 @@ module.exports = {
                 " S: " + S + 
                 " Su: " + Percentage(Su, S) 
             );
-            console.log("D: " + GetSetItems(D));
-            console.log("W: " + GetSetItems(W));
-            console.log("A: " + GetSetItems(A));
+            console.log("D: " + GetSetItems(D, "fetchStart"));
+            console.log("W: " + GetSetItems(W, "waitStart"));
+            console.log("A: " + GetSetItems(A, "analysisStart"));
         }
 
         // create the analysis queue
@@ -164,6 +164,17 @@ function Percentage(value, max) {
     return value + " (" + Math.trunc(value/ max * 10000) / 100 + "%)"
 }
 
+function HMS(start) {
+    let d = new Date().getTime() / 1000 - start;
+    let s = d % 60;
+    d = (d - s) / 60;
+    let m = d % 60;
+    d = (d - m) / 60;
+    let h = (d % 24);
+    s = Math.trunc(s);
+    return h + ":" + m + ":" + s;
+}
+
 function DHMS(start) {
     let d = new Date().getTime() / 1000 - start;
     let s = d % 60;
@@ -177,9 +188,9 @@ function DHMS(start) {
 
 }
 
-function GetSetItems(set) {
+function GetSetItems(set, start) {
     let result = "";
-    set.forEach((item) => { result += " " + item});
+    set.forEach((item) => { result += " " + item.fullName + "(" + HMS(item.extras.time[start]) + ")"});
     return result.substr(1);
 }
 
@@ -199,35 +210,34 @@ function TrackFile(project, path) {
 function DownloadProject() {
     if (W.size < W_MAX && D.size < W_MAX && PQ.length > 0) {
         let project = new Project(PQ.shift());
-        D.add(project.fullName);
+        project.extras.time.fetchStart = new Date().getTime() / 1000,
+        D.add(project);
         if (PQ.length < PQ_MAX)
             PI.resume();
         project.exists((does) => {
             if (does && skipExisting) {
-                D.delete(project.fullName);
+                D.delete(project);
                 project.log("skipped");
                 return DownloadProject();
             }
             project.log("fetching...");
             project.getMetadata((err) => {
                 if (err) {
-                    D.delete(project.fullName);
+                    D.delete(project);
                     ++P; ++Pe;
                     return project.error(err, DownloadProject);
                 }
-                project.extras.time = {
-                    clone : new Date().getTime() / 1000,
-                }
                 project.clone((err) => {
                     if (err) {
-                        D.delete(project.fullName);
+                        D.delete(project);
                         ++P; ++Pe;
                         return project.error(err, DownloadProject);
                     }
-                    project.extras.time.clone = new Date().getTime() / 1000 - project.extras.time.clone;  
+                    project.extras.time.fetch = new Date().getTime() / 1000 - project.extras.time.fetchStart;  
                     project.log("scheduling...")
-                    D.delete(project.fullName);
-                    W.add(project.fullName);
+                    project.extras.time.waitStart = new Date().getTime() / 1000;
+                    D.delete(project);
+                    W.add(project);
                     Q.push(project);
                 })
             });
@@ -236,20 +246,20 @@ function DownloadProject() {
 }
 
 function AnalyzeProject(project, callback) {
-    W.delete(project.fullName);
+    W.delete(project);
     DownloadProject();
+    project.extras.time.analysisStart = new Date().getTime() / 1000;
     // this is here if we ever want to download more branches
-    A.add(project.fullName);
+    A.add(project);
     let callback2 = (err) => {
         ++P;
-        A.delete(project.fullName);
+        A.delete(project);
         callback(err);
     }
-    project.extras.time.analysis = new Date().getTime() / 1000;
     AnalyzeBranch(project, project.metadata.default_branch, (err) => {
         if (err)
             return project.error(err, callback2);
-        project.extras.time.analysis = new Date().getTime() / 1000 - project.extras.time.analysis;
+        project.extras.time.analysis = new Date().getTime() / 1000 - project.extras.time.analysisStart;
         project.save((err) => {
             if (err)
                 return project.error(err, callback2);
@@ -337,6 +347,9 @@ class Project {
         this.fullName = fullName;
         this.branches = {};
         this.extras = {
+            time : {
+
+            },
             commits : 0,
             snapshots: 0,
         };

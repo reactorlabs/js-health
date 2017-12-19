@@ -104,12 +104,32 @@ module.exports = {
             }
         }
 
+        let report = () => {
+            console.log("---- " + DHMS(t));
+            console.log(
+                " PQ: " + PQ.length + 
+                " W: " + W.size +
+                " D: " + D.size +
+                " Q: " + Q.length() + 
+                " A: " + A.size +
+                " P: " + P + 
+                " Pe " + Percentage(Pe, P) +
+                " C: " + C + 
+                " Cu: " + Percentage(Cu, C) +
+                " S: " + S + 
+                " Su: " + Percentage(Su, S) 
+            );
+            console.log("D: " + GetSetItems(D));
+            console.log("W: " + GetSetItems(W));
+            console.log("A: " + GetSetItems(A));
+        }
+
         // create the analysis queue
         Q = new async.queue(AnalyzeProject, numWorkers);
         Q.drain = () => {
             // if all projects were read and none are waiting for analysis or being cloned, we can exit 
             if (canExit && W.size === 0 && D.size == 0) {
-                console.log("total time: " + (new Date().getTime() / 1000 - t));
+                report();
                 console.log("KTHXBYE!");
                 process.exit();
             }
@@ -133,27 +153,11 @@ module.exports = {
                 PI.pause();
             DownloadProject();
         });
-        setInterval(() => {
-            console.log("---- " + DHMS(t));
-            console.log(
-                " PQ: " + PQ.length + 
-                " W: " + W.size +
-                " D: " + D.size +
-                " Q: " + Q.length() + 
-                " A: " + A.size +
-                " P: " + P + 
-                " Pe " + Percentage(Pe, P) +
-                " C: " + C + 
-                " Cu: " + Percentage(Cu, C) +
-                " S: " + S + 
-                " Su: " + Percentage(Su, S) 
-            );
-            console.log("D: " + GetSetItems(D));
-            console.log("W: " + GetSetItems(W));
-            console.log("A: " + GetSetItems(A));
-        }, 10000);
+        if (verbose) 
+            setInterval(report, 10000);
     }
 }
+
 
 
 function Percentage(value, max) {

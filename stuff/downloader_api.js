@@ -228,7 +228,7 @@ function SaveProjectInfo(project, callback) {
                 ProjectFatalError(callback, project, err, "Unable to save project.json");
             } else {
                 ++stats_projects;
-                callback();
+                //callbgit(github.com:reactorlabs/js-health.gitack();
             }
         });
     };

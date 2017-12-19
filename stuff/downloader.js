@@ -1,497 +1,518 @@
-const async = require("async");
-const request = require("request")
 const fs = require("fs");
-const readline = require("readline")
+const async = require("async");
 const mkdirp = require("mkdirp")
 const tmp = require("tmp");
 const child_process = require("child_process");
+const LineByLineReader = require("line-by-line");
+
+const git = require("./git.js");
+const github = require("./github.js");
+
+let apiTokens = "";
+let inputFile = "";
+let outputDir = ""; // output directory
+let tmpDir = "/tmp"; // location of the temporary directory, a ramdisk is suggested
+let skipExisting = false; // if true, projects already downloaded properly will be skipped
+let stride = 1; // stride of analyzed projects for easy distribution and parallelism
+let first = 0; // first project to analyze
+let PQ_MAX = 100; // max number of preloaded project names
+let W_MAX = 0; // max projects that can wait for analysis simultaneously (or be downloaded at the same time)
+let numWorkers = 1; // number of workers
 
 
+
+let PQ = []; // project names queued for download
+let PI = null; // input file with projects to analyze 
+let Q = null; // worker queue for projects that are downloaded
+
+
+let D = new Set(); // currently downloaded
+let W = new Set(); // waiting to be analyzed
+let A = new Set(); // currently analyzed 
+
+// stats
+
+let P = 0; // all projects;
+let Pe = 0; // failed projects;
+let C = 0; // all commits
+let Cu = 0; // unique commits
+let S = 0; // all snapshots
+let Su = 0; // unique snapshots;
+
+let projectIndex_ = 0; // project index, used for strides calculation
 
 module.exports = {
-    help : function() {
+
+    Help: () => {
+        console.log("")
+        console.log("download TOKENS INPUT_FILE OUTPUT_DIR [OPTS]");
+        console.log("    TOKENS = file where GitHub API tokens are located")
+        console.log("    INPUT_FILE = csv file produced byt filter_projects stage with files to analyze");
+        console.log("    OUTPUT_DIR = directory where the outputs will be stored (see below)")
+        console.log("");
+        console.log("Reads all projects in the input file, clones them and analyzes their commits on the main branch,")
+        console.log("adding any new snapshots, commits, or projects to the output directory.")
+        console.log("");
+        console.log("Optional arguments:")
+        console.log("")
+        console.log("    --skip-existing - skips already downloaded projects")
+        console.log("    --verbose - displays extra information every 10 seconds")
+        console.log("    --first=N - sets index of the first project to analyze")
+        console.log("    --stride=N - sets stride value for distributed analysis")
+        console.log("    --max-pq=N - sets number of filenames to preload");
+        console.log("    --max-w=N - sets number of prefetched projects");
+        console.log("    --tmp-dir=PATH - sets the location of temporary directory")
+        console.log("    --max-workers=N - sets the number of simultaneously analyzed projects")
     },
 
-    download : function() {
-        let numWorkers = 1;
-        outputDir = "/home/peta/jsdownload"
-
-        // make sure we have the folders we need
-        mkdirp.sync(outputDir);
-        mkdirp.sync(outputDir + "/projects");
-        mkdirp.sync(outputDir + "/snapshots");
-        mkdirp.sync(outputDir + "/commits");
-
-        // load the github ai tokens
-        Github.LoadTokens("/home/peta/githubtokens.json");
-
-        projects = [
-            "Offsite/TaskCodes",
-            "adammark/Markup.js",
-            "pockethub/PocketHub",
-            "angular/angular.js",
-            "powmedia/buildify",
-            "6a68/browserid",
-            "fredwu/jquery-endless-scroll",
-            "yui/yui3",
-        ]
-
-
-        console.log("  loaded " + projects.length + " projects");
-        console.log("Starting the main queue, workers: " + numWorkers);
-        Q = async.queue(Task, numWorkers);
-        Q.drain = CanExit;
-        Q.push({ kind : "project", index : 0});
-    }
-}
-
-
-
-function CanExit() {
-    console.log("done");
-    process.exit();
-}
-
-
-function Task(task, callback) {
-    switch (task.kind) {
-        case "project":
-            let name = projects[task.index++];
-            if (task.index < projects.length) 
-                Q.push({ kind: "project", index: task.index});
-            Project.Start(name, callback);
-            break;
-        case "branch":
-            task.project.analyzeBranch(task.name, callback);
-            break;
-        case "commit":
-            task.project.analyzeCommit(task.hash, callback);
-            break;
-
-        default:
-            console.error("[ERROR] Invalid task " + task.kind);
-            callback();
-    }
-}
-
-
-/** Wrapper around calls to Github. Manages github api tokens and provides api and normal HTTP get wrapper methods with retries and basic error checking. */
-class Github {
-
-    /** Executes given API requests with at most given number of retries. 
-     */
-    static APIRequest(url, callback, retries = 10) {
-        // if we have no more retries, return error
-        if (retries < 0) 
-            return callback("RETRY_FAIL", null, null);
-        // get next token and initiate the request
-        let token = Github.GetToken_();
-        let options = {
-            url : url,
-            json : true,
-            headers : {
-                "Authorization" : "token " + token,
-                "User-Agent" : "js-health"
+    Download : () => {
+        let t = new Date().getTime() / 1000;
+        apiTokens = process.argv[3];
+        console.log("- github api tokens: " + apiTokens + " (" + github.LoadTokensSync(apiTokens) + ")");
+        inputFile = process.argv[4];
+        console.log("- input file : " + inputFile);
+        outputDir = process.argv[5];
+        if (! outputDir.endsWith("/"))
+            outputDir += "/";
+        console.log("- output dir: " + outputDir);
+        for (let i = 6; i < process.argv.length; ++i) {
+            let arg = process.argv[i];
+            if (arg == "--skip-existing") {
+                skipExisting = true;
+                console.log("- skiping existing projects");
+            } else if (arg === "--verbose") {
+                verbose = true;
+                console.log("- verbose mode enabled");
+            } else if (arg.startsWith("--first=")) {
+                first = parseInt(arg.substr(8));
+                console.log("- first project id: " + first);
+            } else if (arg.startsWith("--stride=")) {
+                stride = parseInt(arg.substr(9));
+                console.log("- stride : " + stride);
+            } else if (arg.startsWith("--max-pq=")) {
+                PQ_MAX = parseInt(arg.substr(9));
+                console.log("- max-pq: " + PQ_MAX);
+            } else if (arg.startsWith("--max-w=")) {
+                W_MAX = parseInt(arg.substr(8));
+                console.log("- max-w: " + W_MAX);
+            } else if (arg.startsWith("--tmp-dir=")) {
+                tmpDir = arg.substr(10);
+                console.log("- temporary directory: " + tmpDir);
+            } else if (arg.startsWith("--max-workers=")) {
+                numWorkers = parseInt(arg.substr(14));
+                console.log("- number of workers: " + numWorkers);
             }
-        };
-        request(options, (error, response, body) => {
-            ++Github.RequestsCount;
-            if (error) 
-                return Github.Retry_(() => { Github.APIRequest(url, callback, retries - 1); });
-            if (response.statusCode === 404)
-                return callback(404, response, body);
-            if (response.statusCode !== 200) 
-                return Github.Retry_(() => { Github.APIRequest(url, callback, retries - 1); });
-            callback(error, response, body);
+        }
+
+        // create the analysis queue
+        Q = new async.queue(AnalyzeProject, numWorkers);
+        Q.drain = () => {
+            // if all projects were read and none are waiting for analysis or being cloned, we can exit 
+            if (canExit && W.size === 0 && D.size == 0) {
+                console.log("total time: " + (new Date().getTime() / 1000 - t));
+                console.log("KTHXBYE!");
+                process.exit();
+            }
+        }
+
+        let canExit = false;
+        PI = new LineByLineReader(inputFile);
+        PI.on("end", () => {
+            canExit = true;
+        })
+        PI.on("line", (line) => {
+            ++projectIndex_;
+            // if the project is smaller than first project we should look at, ignore it
+            if (projectIndex_ < first)
+                return;
+            // also ignore projects of different strides  
+            if ((projectIndex_ - first) % stride !== 0)
+                return;
+            PQ.push(line.split(",")[0]);
+            if (PQ.length >= PQ_MAX)
+                PI.pause();
+            DownloadProject();
         });
+        setInterval(() => {
+            console.log("---- " + DHMS(t));
+            console.log(
+                " PQ: " + PQ.length + 
+                " W: " + W.size +
+                " D: " + D.size +
+                " Q: " + Q.length() + 
+                " A: " + A.size +
+                " P: " + P + 
+                " Pe " + Percentage(Pe, P) +
+                " C: " + C + 
+                " Cu: " + Percentage(Cu, C) +
+                " S: " + S + 
+                " Su: " + Percentage(Su, S) 
+            );
+            console.log("D: " + GetSetItems(D));
+            console.log("W: " + GetSetItems(W));
+            console.log("A: " + GetSetItems(A));
+        }, 10000);
     }
+}
 
-    /** Returns the given github URL that does not require the GitHub API authentication.
-     */
-    static Get(url, callback, retries = 10) {
-        // if we have no more retries, return error
-        if (retries < 0) 
-        return callback("RETRY_FAIL", null, null);
-        let options = {
-            url : url,
-            headers : {
-                "User-Agent" : "js-health"
-            } 
-        };
-        request(options, (error, response, body) => {
-            ++Github.GetsCount;
-            if (error) 
-                return Github.Retry_(() => { Github.Get(url, callback, retries - 1); });
-            if (response.statusCode === 404)
-                return callback(404, response, body);
-            if (response.statusCode !== 200) 
-                return Github.Retry_(() => { Github.Get(url, callback, retries - 1); });
-            callback(error, response, body);
-        });
-    }
 
-    /** Loads the api tokens from given file.
-     */
-    static LoadTokens(filename) {
-        console.log("Loading Github API Tokens from " + filename)
-        Github.tokens_ = JSON.parse(fs.readFileSync(filename));
-        console.log("    " + Github.tokens_.length + " tokens found...");
-    }
+function Percentage(value, max) {
+    return value + " (" + Math.trunc(value/ max * 10000) / 100 + "%)"
+}
 
-    /** Returns next available token for the request. */
-    static GetToken_() {
-        let token = Github.tokens_[Github.currentToken_++];
-        if (Github.currentToken_ == Github.tokens_.length)
-            Github.currentToken_ = 0;
-        return token;
-    }
-
-    /** Incremnents the retries counter and then executes the what argument, which should perform the retry itself. */
-    static Retry_(what) {
-        ++Github.RetryCount;
-        what();
-    }
+function DHMS(start) {
+    let d = new Date().getTime() / 1000 - start;
+    let s = d % 60;
+    d = (d - s) / 60;
+    let m = d % 60;
+    d = (d - m) / 60;
+    let h = (d % 24);
+    d = (d - h) / 24;
+    s = Math.trunc(s);
+    return d + ":" + h + ":" + m + ":" + s;
 
 }
 
-Github.RequestsCount = 0;
-Github.GetsCount = 0;
-Github.RetryCount = 0;
-
-Github.tokens_ = [];
-Github.currentToken_ = 0;
-
-/** Wrapper around calls to git.
- */
-class Git {
-
-    static Clone(project, callback) {
-        child_process.exec("GIT_TERMINAL_PROMPT=0 git clone " + project.url + " " + project.localDir, callback);
-    } 
-
-    static Query(project, query, callback) {
-
-    }
-
-
+function GetSetItems(set) {
+    let result = "";
+    set.forEach((item) => { result += " " + item});
+    return result.substr(1);
 }
 
-class Project {
+function TrackFile(project, path) {
+    if (path.includes("node_modules")) {
+        // TODO mark in the project
+        return null; // denied file
+    }
+    if (path.endsWith(".js") || (path.endsWith(".coffee") || (path.endsWith(".litcoffee")) || (path.endsWith(".ts"))))
+        return true;
+    if (path === "package.json")
+        return true;
+    // TODO perhaps add gulpfiles, gruntfiles, travis, etc. ?
+    return false;
+}
 
-    /** Task that starts analysis of a project. When done, calls the given callback. */
-    static Start(projectName, callback) {
-        let project = new Project(projectName);
-        project.loadPreviousResults((error) => {
-            // error should always be null
-            project.getMetadata((error, analyze) => {
-                if (error)
-                    return project.fatalError(error, callback, "Cannot obtain project metadata from github");
-                if (analyze) {
-                    project.clone((error) => {
-                        if (error)
-                            return project.fatalError(error, callback, "Unable to clone project");
-                        project.switchTask({ kind : "branch", name : project.info.default_branch }, callback);
-                    });
-                } else {
-                    project.endTask(callback);
+function DownloadProject() {
+    if (W.size < W_MAX && D.size < W_MAX && PQ.length > 0) {
+        let project = new Project(PQ.shift());
+        D.add(project.fullName);
+        if (PQ.length < PQ_MAX)
+            PI.resume();
+        project.exists((does) => {
+            if (does && skipExisting) {
+                D.delete(project.fullName);
+                project.log("skipped");
+                return DownloadProject();
+            }
+            project.log("fetching...");
+            project.getMetadata((err) => {
+                if (err) {
+                    D.delete(project.fullName);
+                    ++P; ++Pe;
+                    return project.error(err, DownloadProject);
                 }
+                project.extras.time = {
+                    clone : new Date().getTime() / 1000,
+                }
+                project.clone((err) => {
+                    if (err) {
+                        D.delete(project.fullName);
+                        ++P; ++Pe;
+                        return project.error(err, DownloadProject);
+                    }
+                    project.extras.time.clone = new Date().getTime() / 1000 - project.extras.time.clone;  
+                    project.log("scheduling...")
+                    D.delete(project.fullName);
+                    W.add(project.fullName);
+                    Q.push(project);
+                })
             });
         });
     }
+}
 
-    /** Task that starts analyzing given branch in the specified project. */
-    analyzeBranch(name, callback) {
-        let project = this; 
-        // get the latest commit of the branch
-        project.getLatestBranchCommit(name, (error, hash) => {
-            if (error)
-                return project.fatalError(error, callback, "Unable to obtain latest commit for branch " + name);
-            // if the branch has already been analyzed at this commit, no need to reanalyze
-            if (project.branches[name] == hash) 
-                return project.endTask(callback);
-            // othwreise note that the commit is analyzed and switch task
-            project.branches[name] = hash;
-            project.switchTask({ kind : "commit", hash : hash});
+function AnalyzeProject(project, callback) {
+    W.delete(project.fullName);
+    DownloadProject();
+    // this is here if we ever want to download more branches
+    A.add(project.fullName);
+    let callback2 = (err) => {
+        ++P;
+        A.delete(project.fullName);
+        callback(err);
+    }
+    project.extras.time.analysis = new Date().getTime() / 1000;
+    AnalyzeBranch(project, project.metadata.default_branch, (err) => {
+        if (err)
+            return project.error(err, callback2);
+        project.extras.time.analysis = new Date().getTime() / 1000 - project.extras.time.analysis;
+        project.save((err) => {
+            if (err)
+                return project.error(err, callback2);
+            project.cleanup();
+            project.log("done - clone: " + project.extras.time.clone + ", analysis: " + project.extras.time.analysis + ", commits: " + project.extras.commits + ", snapshots: " + project.extras.snapshots);
+            callback2(null);
+        })
+    });
+
+}
+
+function AnalyzeBranch(project, branchName, callback) {
+    project.log("analyzing branch " + branchName)
+    git.GetLatestCommit(project, branchName, (err, commitHash) => {
+        if (err)
+            return callback(err);
+        project.branches[branchName] = commitHash;
+        git.GetCommits(project, commitHash, (err, commits) => {
+            if (err)
+                return callback(err);
+            let i = commits.length - 1;
+            let f = (err) => {
+                if (err)
+                    return callback(err);
+                if (i < 0) {
+                    // TODO save the commit etc etc
+                    return callback(null);
+                }
+                let c = new Commit(commits[i--]);
+                AnalyzeCommit(project, c, f);
+            }
+            f(null);
+        })
+    });
+}
+
+function AnalyzeCommit(project, commit, callback) {
+    ++C;
+    ++project.extras.commits;
+    //project.log("analyzing commit " + commit.hash);
+    commit.exists((does) => {
+        if (does)
+            return callback(null);
+        git.GetCommitChanges(project, commit, (err, changes) => {
+            if (err)
+                return callback(err);
+                let i = 0;
+            let f = (err) => {
+                if (err)
+                    return callback(err);
+                if (i == changes.length) 
+                    return commit.save((err) => {
+                        if (err)
+                            return callback(err);
+                        ++Cu;
+                        callback(null);
+                    });
+                let ch = changes[i++];
+                if (TrackFile(project, ch.path)) {
+                    commit.files.push(ch);
+                    ++project.extras.snapshots;
+                    ++S;
+                    if (ch.hash !== "0000000000000000000000000000000000000000") {
+                        return Snapshot.Exists(ch.hash, (does) => {
+                            if (does)
+                                return f(null);
+                            Snapshot.SaveAs(project, ch.hash, (err) => {
+                                if (err)
+                                    return callback(err);
+                                ++Su;
+                                f(null);
+                            });
+                        });
+                    }
+                }
+                f(null);
+            }
+            f(null);
+        })
+    });
+}
+
+class Project {
+    constructor (fullName) {
+        this.fullName = fullName;
+        this.branches = {};
+        this.extras = {
+            commits : 0,
+            snapshots: 0,
+        };
+    }
+
+    exists(callback) {
+        let path = Project.GetPath_(this.fullName);
+        fs.access(path.dir + path.filename, (err) => {
+            if (err)
+                callback(false);
+            else
+                callback(true);
         });
     }
 
-    /** Analyzes the given commit. */
-    analyzeCommit(hash, callback) {
-        let project = this;
-        let commit = new Commit(hash);
-
-
-    }
-
-    constructor(name) {
-        this.url = "https://github.com/" + name;
-        this.path = Project.GetPath_(name);
-        this.info = {
-            full_name : name
-        };
-        this.errors = [];
-        this.branches = {};
-        this.tasks = 1;
-        this.time = {
-            created : new Date().getTime() / 1000
+    save(callback) {
+        let data = {
+            fullName : this.fullName,
+            branches : this.branches,
+            extras : this.extras,
+            metadata : this.metadata,
         }
-        // list of commits 
-        this.commits = {}
-        // increase the number of opened projects
-        ++Project.Opened; 
+        let path = Project.GetPath_(this.fullName);
+        mkdirp(path.dir, (err) => {
+            if (err)
+                return callback(err);
+            fs.writeFile(path.dir + path.filename, JSON.stringify(data), callback);
+        })
     }
 
-
-    addTask(q, task) {
-        ++this.tasks;
-        task.project = this;
-        q.unshift(task);
+    cleanup() {
+        if (this.localDirCleanup)
+            this.localDirCleanup();
     }
 
-    switchTask(task, callback) {
-        task.project = this;
-        Task(task, callback);
+    error(err, callback) {
+        ++Pe;
+        console.log("! " + this.fullName + ": " + err);
+        this.cleanup();
+        callback(err);
     }
 
-    /** Decreases the number of tasks associated with the project and if this number drops to zero, i.e. if there are no pending tasks for the project, performs the project cleanup and saves the project results.
-     */
-    endTask(callback) {
-        let project = this;
-        if (--this.tasks == 0) {
-            this.log("Closing");
-            // first delete the temporary directory
-            this.cleanup_();
-            if (this.incremental) {
-                return project.save_(callback);
-            } else {
-                mkdirp(project.path, (err, made) => {
-                    if (err)
-                        return project.fatalError(err, callback, "Unable to create project folder " + project.path);
-                    project.save_(callback);
-                });
-            }
-        }
+    log(message) {
+        console.log("> " + this.fullName + ": " + message);
     }
 
-    /** Raises a fatal error, which stops the entire project from being processed further.
-     */
-    fatalError(error, callback, reason) {
-        ++Project.Errors;
-        this.tasks = -1;
-        this.cleanup_();
-        // TODO log the error
-        console.error("[FATAL] Project: " + this.info.full_name + ": " + reason);
-        callback();
-    }
-
-    log(what) {
-        console.log("[INFO] Project: " + this.info.full_name + ": " + what);
-    }
-
-    /** If the project has already been analyzed, fetches the project metadata from disk which together with the new fetch of the metadata quickly determines if the project needs to be reanalyzed again. */
-    loadPreviousResults(callback) {
-        let project = this;
-        fs.readFile(project.path +"/project.json", (err, data) => {
-            if (! err) {
-                let x = JSON.parse(data);
-                project.info = x.info;
-                project.branches = x.branches;
-                project.errors = x.errors;
-                project.times
-                // mark the project as incremental analysis because we already have previous results
-                project.incremental = true;
-            }
-            // not being able to load previous results is not an error in itself
+    getMetadata(callback) {
+        let p = this;
+        github.Request("repos/" + this.fullName, (err, data) => {
+            if (err)
+                return callback(err);
+            p.metadata = data;
             callback(null);
         });
     }
 
-    /** Reads the project metadata from github. The callback is given true if the project should be analyzed, or false, if there is no need to re-analyze the project. 
-     */
-    getMetadata(callback) {
-        let project = this;
-        Github.APIRequest("http://api.github.com/repos/" + project.info.full_name, (error, response, result) => {
-            if (error)
-                return callback(error, false);
-            let i = project.info;
-            // fill in the task project
-            i.id = result.id;
-            i.name = result.name
-            i.full_name = result.full_name;
-            //i.fullName = result.fullName;
-            i.description = result.description;
-            i.ownerId = result.owner.id;
-            i.fork = result.fork;
-            i.size = result.size;
-            i.forks_count = result.forks_count;
-            i.stargazers_count = result.stargazers_count;
-            i.watchers_count = result.watchers_count;
-            i.language = result.language;
-            i.has_issues = result.has_issues;
-            i.open_issues_count = result.open_issues_count;
-            i.default_branch = result.default_branch;
-            // if the project is fork and we have parent, store its id
-            if (result.parent !== undefined)
-            i.parent = {
-                id : result.parent.id,
-                fullName : result.parent.full_name
-            };
-            i.created_at = result.created_at;
-            // check if the project has changed since last time we have seen it, and if so, 
-            if (i.updated_at === result.updated_at && i.pushed_at === result.pushed_at) {
-                console.log("project " + project.info.fullName + " did not change, skipping...");
-                callback(null, false);
-            } else { 
-                i.updated_at = result.updated_at;
-                i.pushed_at = result.pushed_at;
-                callback(null, true);
-            }
-        });
-    }
-
-    /** Clones the given project from github into a temporary directory and when done, calls the callback.
-     */
     clone(callback) {
-        let project = this;
-        tmp.dir({ unsafeCleanup: true }, (err, path, cleanupCallback) => {
-            if (err) 
-                return callback("Unable to create temporary directory to clone the project");
-            project.localDir = path;
-            project.localDirCleanup = cleanupCallback;
-            project.log("Cloning into " + project.localDir);
-            // do the git clone
-            Git.Clone(project, (error, cout, cerr) => {
-                if (error)
-                    return callback("unable to clone project");
-                // record the time at which the project was cloned
-                project.time.cloned = new Date().getTime() / 1000;
-                project.log("Cloned");
-                // call the callback
-                callback(null);
-            })
-        });
-    }
-
-    getLatestBranchCommit(branchName, callback) {
-        let project = this;
-        Git.Query(project, "git checkout " + branchName, (error, cout, cerr) => {
-            if (error)
-                return callback("Unable to checkout branch " + branchName, null);
-            Git.Query(project, "git rev-parse HEAD", (error, cout, cerr) => {
-                if (error)
-                    return callback("Unable to parse latest branch commit");
-                callback(null, cout.trim());
+        let p = this;
+        tmp.tmpName({
+            dir : tmpDir,
+        }, (err, path) => {
+            if (err)
+                return callback(err);
+            mkdirp(path, (err) => {
+                if (err)
+                    return callback(err);
+                p.localDir = path;
+                p.localDirCleanup = () => {
+                    child_process.exec("rm -rf " + path, (err, cout, cerr) => {});
+                }
+                git.Clone(this,callback);
             });
         });
-    } 
-
-    /** If the project was cloned, deletes the temporary folder. */
-    cleanup_() {
-        if (this.localDirCleanup) {
-            this.log("Cleaning tmp dir " + this.localDir);
-            this.localDirCleanup();
-            this.localDirCleanup = null;
-        }
-        ++Project.Closed;
     }
 
-    /** Saves the project information to the project.json file when the project has finished. */
-    save_(callback) {
-        let project = this;
-        project.time.done = new Date().getTime() / 1000;
-        // then save the project info
-        fs.writeFile(project.path + "/project.json", JSON.stringify({
-            info : project.info, 
-            branches : project.branches,
-            errors : project.errors,
-            time : project.time
-        }), (err) => {
-            if (err)
-                return project.fatalError(error, callback, "Unable to save project information when closing the project");
-            callback();
-        });
-        
-    }
-
-    /** Encodes given name as project path, i.e. replaces special characters with _ followed by the ASCII hex code and takes first two letters as a subfolder to make sure that we do not end up with too many projects in same folder. 
-     */
-    static GetPath_(name) {
-        let path = "";
-        for (let i = 0; i < name.length; ++i) {
-            let x = name[i];
+    static GetPath_(fullName) {
+        let filename = "";
+        for (let i = 0; i < fullName.length; ++i) {
+            let x = fullName[i];
             if (
                 (x >= '0' && x < '9') ||
                 (x >= 'a' && x < 'z') ||
                 (x >= 'A' && x < 'Z') ||
                 (x == '-')
             ) {
-                path += x;
+                filename += x;
             } else {
-                path = path + '_';
+                filename = filename + '_';
                 x = x.charCodeAt(0);
                 let xx = Math.floor(x / 16);
-                path += xx.toString(16);
+                filename += xx.toString(16);
                 xx = x % 16;
-                path += xx.toString(16);
+                filename += xx.toString(16);
             }
         }
-        return outputDir + "/projects/" + path.substr(0, 2) + "/" + path;
+
+        return {
+            dir : outputDir + "projects/" + filename.substr(0,3) + "/",
+            filename: filename,
+        };
     }
 }
-
-Project.Opened = 0;
-Project.Closed = 0;
-Project.Errors = 0;
 
 class Commit {
-
-    /** Task that analyzes the provided commit for given project.
-     */
-    static Analyze(project, commitHash, callback) {
-        let commit = new Commit(commitHash);
-        commit.loadPreviousResults((error) => {
-            // if the commit is loaded, we are done with it and do not even need to recurse into its parents
-            if (commit.loaded)
-                return callback();
-            // otherwise we fill in the commits 
-        })
-
-    }
-
-
-    constructor(hash) {
-        this.path = outputDir + "/commits/" + hash.substr(0, 3) + "/" + hash.substr(3, 3) + "/" + hash;
-        this.files = []
-        this.parents = []
+    constructor (c) {
+        this.hash = c.hash;
+        this.parents = c.parents;
+        this.files = [];
         this.info = {
-            hash : hash
+            date : c.date,
+            author : c.author,
+            authorEmail : c.authorEmail,
+            message : c.message,
         }
-        // number of tasks depending on the commit 
-        this.tasks = 1;
+        this.extras = {};
     }
 
-    loadPreviousResults() {
-        let commit = this;
-        fs.readFile(commit.path, (err, data) => {
-            if (! err) {
-                let x = JSON.parse(data);
-                commit.files = x.files;
-                commit.parents = x.parents;
-                commit.info = x.info;
-                commit.loaded = true;
-            }
-            // not being able to load commit does not mean 
-            callback(null);
-        })
+    exists(callback) {
+        let p = Commit.GetPath_(this.hash);
+        fs.access(p.dir + p.filename, (err) => {
+            if (err)
+                callback(false);
+            else
+                callback(true);
+        });
     }
 
+    save(callback) {
+        let data = {
+            hash : this.hash,
+            parents : this.parents,
+            files : this.files,
+            info : this.info,
+            extras : this.extras,
+        }
+        let path = Commit.GetPath_(this.hash);
+        mkdirp(path.dir, (err) => {
+            if (err)
+                return callback(err);
+            fs.writeFile(path.dir + path.filename, JSON.stringify(data), callback);
+        });
+    }
+
+    static GetPath_(hash) {
+        return {
+            dir : outputDir + "commits/" + hash.substr(0,2) + "/" + hash.substr(2,2) + "/",
+            filename : hash.substr(4),
+        };
+    }
 }
 
+class Snapshot {
+
+    static Exists(hash, callback) {
+        let path = Snapshot.GetPath_(hash);
+        fs.access(path.dir, (err) => {
+            if (err)
+                callback(false);
+            else
+                callback(true);
+        })
+    }
+
+    static SaveAs(project, hash, callback) {
+        let path = Snapshot.GetPath_(hash);
+        mkdirp(path.dir, (err) => {
+            if (err)
+                return callback(err);
+            git.SaveSnapshot(project, hash, path.dir + path.filename, callback);
+        })
+    }
+
+    static GetPath_(hash) {
+        return {
+            dir : outputDir + "snapshots/" + hash.substr(0, 2) + "/" + hash.substr(2,2) + "/",
+            filename : hash.substr(4),
+        };
+    }
 
 
-let Q = null;
-
-let projects = [];
-let outputDir = null;
+}
 
 

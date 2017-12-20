@@ -12,6 +12,7 @@ let apiTokens = ""; // file where the github api tokens for downloading metadata
 let inputFile = ""; // input file with lists of projects to download & analyze
 let outputDir = ""; // output directory
 let tmpDir = "/tmp"; // location of the temporary directory, a ramdisk is suggested
+let clearTmp = false; // clear the temp directory contents before starting
 let skipExisting = false; // if true, projects already downloaded properly will be skipped
 let stride = 1; // stride of analyzed projects for easy distribution and parallelism
 let first = 0; // first project to analyze
@@ -60,6 +61,7 @@ module.exports = {
         console.log("    --max-pq=N - sets number of filenames to preload");
         console.log("    --max-w=N - sets number of prefetched projects");
         console.log("    --tmp-dir=PATH - sets the location of temporary directory")
+	console.log("    --clear-tmp - clears the tmp dir before starting")
         console.log("    --max-workers=N - sets the number of simultaneously analyzed projects")
     },
 
@@ -90,7 +92,11 @@ function ProcessCommandLine() {
         if (arg == "--skip-existing") {
             skipExisting = true;
             console.log("- skiping existing projects");
-        } else if (arg === "--verbose") {
+	    
+        } else if (arg === "--clear-tmp") {
+	    clearTmp = true;
+	    console.log("- tmp directory will be cleared");
+	} else if (arg === "--verbose") {
             verbose = true;
             console.log("- verbose mode enabled");
         } else if (arg.startsWith("--first=")) {
@@ -120,6 +126,10 @@ function ProcessCommandLine() {
 }
 
 function DoDownload() {
+    if (clearTmp) {
+	console.log("Clearing temp directory...");
+	child_process.execSync("rm rf " + tmpDir + "/*");
+    }
     console.log("Downloaded " + github.LoadTokensSync(apiTokens) + " API Tokens");
     // determines that all project have been a
     let allRead= false;
@@ -435,7 +445,6 @@ class Project {
         }, (err, path) => {
             if (err)
                 return callback(err);
-            path = first + "_" + path; // prefix with first so that we can easily delete old projects
             mkdirp(path, (err) => {
                 if (err)
                     return callback(err);

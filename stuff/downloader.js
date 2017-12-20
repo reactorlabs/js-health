@@ -8,8 +8,8 @@ const LineByLineReader = require("line-by-line");
 const git = require("./git.js");
 const github = require("./github.js");
 
-let apiTokens = "";
-let inputFile = "";
+let apiTokens = ""; // file where the github api tokens for downloading metadata can be located
+let inputFile = ""; // input file with lists of projects to download & analyze
 let outputDir = ""; // output directory
 let tmpDir = "/tmp"; // location of the temporary directory, a ramdisk is suggested
 let skipExisting = false; // if true, projects already downloaded properly will be skipped
@@ -19,27 +19,25 @@ let PQ_MAX = 100; // max number of preloaded project names
 let W_MAX = 0; // max projects that can wait for analysis simultaneously (or be downloaded at the same time)
 let numWorkers = 1; // number of workers
 
-
-
 let PQ = []; // project names queued for download
 let PI = null; // input file with projects to analyze 
 let Q = null; // worker queue for projects that are downloaded
 
+// stats
 
 let D = new Set(); // currently downloaded
 let W = new Set(); // waiting to be analyzed
 let A = new Set(); // currently analyzed 
-
-// stats
 
 let P = 0; // all projects;
 let Pe = 0; // failed projects;
 let C = 0; // all commits
 let Cu = 0; // unique commits
 let S = 0; // all snapshots
+let St = 0; // tracked snapshots 
 let Su = 0; // unique snapshots;
 
-let projectIndex_ = 0; // project index, used for strides calculation
+let projectIndex_ = 0; // index of currently read project from the input file
 
 module.exports = {
 
@@ -65,97 +63,165 @@ module.exports = {
         console.log("    --max-workers=N - sets the number of simultaneously analyzed projects")
     },
 
+    /** Full fledged   */
     Download : () => {
-        let t = new Date().getTime() / 1000;
-        apiTokens = process.argv[3];
-        console.log("- github api tokens: " + apiTokens + " (" + github.LoadTokensSync(apiTokens) + ")");
-        inputFile = process.argv[4];
-        console.log("- input file : " + inputFile);
-        outputDir = process.argv[5];
-        if (! outputDir.endsWith("/"))
-            outputDir += "/";
-        console.log("- output dir: " + outputDir);
-        for (let i = 6; i < process.argv.length; ++i) {
-            let arg = process.argv[i];
-            if (arg == "--skip-existing") {
-                skipExisting = true;
-                console.log("- skiping existing projects");
-            } else if (arg === "--verbose") {
-                verbose = true;
-                console.log("- verbose mode enabled");
-            } else if (arg.startsWith("--first=")) {
-                first = parseInt(arg.substr(8));
-                console.log("- first project id: " + first);
-            } else if (arg.startsWith("--stride=")) {
-                stride = parseInt(arg.substr(9));
-                console.log("- stride : " + stride);
-            } else if (arg.startsWith("--max-pq=")) {
-                PQ_MAX = parseInt(arg.substr(9));
-                console.log("- max-pq: " + PQ_MAX);
-            } else if (arg.startsWith("--max-w=")) {
-                W_MAX = parseInt(arg.substr(8));
-                console.log("- max-w: " + W_MAX);
-            } else if (arg.startsWith("--tmp-dir=")) {
-                tmpDir = arg.substr(10);
-                console.log("- temporary directory: " + tmpDir);
-            } else if (arg.startsWith("--max-workers=")) {
-                numWorkers = parseInt(arg.substr(14));
-                console.log("- number of workers: " + numWorkers);
-            }
-        }
+        ProcessCommandLine();
+        DoDownload();
+    },
 
-        let report = () => {
-            console.log("---- " + DHMS(t));
-            console.log(
-                " PQ: " + PQ.length + 
-                " W: " + W.size +
-                " D: " + D.size +
-                " Q: " + Q.length() + 
-                " A: " + A.size +
-                " P: " + P + 
-                " Pe " + Percentage(Pe, P) +
-                " C: " + C + 
-                " Cu: " + Percentage(Cu, C) +
-                " S: " + S + 
-                " Su: " + Percentage(Su, S) 
-            );
-            console.log("D: " + GetSetItems(D, "fetchStart"));
-            console.log("W: " + GetSetItems(W, "waitStart"));
-            console.log("A: " + GetSetItems(A, "analysisStart"));
-        }
+    JSOrange : () => {
+        apiTokens = "/home/peta/github-tokens.json";
+        inputFile = "/home/peta/projects-js.csv";
+        outputDir = "/home/peta/jsdownload";
+        verbose = true;
+        numWorkers = 80;
+        W_MAX = 10;
+        stride = 100;
+        skipExisting = true;
+        first = parseInt(process.argv[3]);
+        DoDownload();
+    },
 
-        // create the analysis queue
-        Q = new async.queue(AnalyzeProject, numWorkers);
-        Q.drain = () => {
-            // if all projects were read and none are waiting for analysis or being cloned, we can exit 
-            if (canExit && W.size === 0 && D.size == 0) {
-                report();
-                console.log("KTHXBYE!");
-                process.exit();
-            }
-        }
+    JSOrange : () => {
+        apiTokens = "/home/peta/github-tokens.json";
+        inputFile = "/home/peta/projects-js.csv";
+        outputDir = "/home/peta/jsdownload";
+        tmpDir = "/ramdisk"
+        verbose = true;
+        numWorkers = 80;
+        W_MAX = 10;
+        stride = 100;
+        skipExisting = true;
+        first = parseInt(process.argv[3]);
+        DoDownload();
+    },
 
-        let canExit = false;
-        PI = new LineByLineReader(inputFile);
-        PI.on("end", () => {
-            canExit = true;
-        })
-        PI.on("line", (line) => {
-            ++projectIndex_;
-            // if the project is smaller than first project we should look at, ignore it
-            if (projectIndex_ < first)
-                return;
-            // also ignore projects of different strides  
-            if ((projectIndex_ - first) % stride !== 0)
-                return;
-            PQ.push(line.split(",")[0]);
-            if (PQ.length >= PQ_MAX)
-                PI.pause();
-            DownloadProject();
-        });
-        if (verbose) 
-            setInterval(report, 10000);
+    JSGinger : () => {
+        apiTokens = "/home/peta/github-tokens.json";
+        inputFile = "/home/peta/projects-js.csv";
+        outputDir = "/home/peta/jsdownload";
+        tmpDir = "/ramdisk";
+        verbose = true;
+        numWorkers = 16;
+        W_MAX = 10;
+        stride = 100;
+        skipExisting = true;
+        first = parseInt(process.argv[3]);
+        DoDownload();
     }
+    
+
+}
+
+
+function ProcessCommandLine() {
+    if (process.argv.length < 6) {
+        console.log("Invalid number of arguments");
+        module.exports.Help();
+        process.exit(-1);
+    }
+    apiTokens = process.argv[3];
+    console.log("- github api tokens: " + apiTokens);
+    inputFile = process.argv[4];
+    console.log("- input file : " + inputFile);
+    outputDir = process.argv[5];
+    if (! outputDir.endsWith("/"))
+        outputDir += "/";
+    console.log("- output dir: " + outputDir);
+    for (let i = 6; i < process.argv.length; ++i) {
+        let arg = process.argv[i];
+        if (arg == "--skip-existing") {
+            skipExisting = true;
+            console.log("- skiping existing projects");
+        } else if (arg === "--verbose") {
+            verbose = true;
+            console.log("- verbose mode enabled");
+        } else if (arg.startsWith("--first=")) {
+            first = parseInt(arg.substr(8));
+            console.log("- first project id: " + first);
+        } else if (arg.startsWith("--stride=")) {
+            stride = parseInt(arg.substr(9));
+            console.log("- stride : " + stride);
+        } else if (arg.startsWith("--max-pq=")) {
+            PQ_MAX = parseInt(arg.substr(9));
+            console.log("- max-pq: " + PQ_MAX);
+        } else if (arg.startsWith("--max-w=")) {
+            W_MAX = parseInt(arg.substr(8));
+            console.log("- max-w: " + W_MAX);
+        } else if (arg.startsWith("--tmp-dir=")) {
+            tmpDir = arg.substr(10);
+            console.log("- temporary directory: " + tmpDir);
+        } else if (arg.startsWith("--max-workers=")) {
+            numWorkers = parseInt(arg.substr(14));
+            console.log("- number of workers: " + numWorkers);
+        } else {
+            console.log("unknown argument: " + arg);
+            module.exports.Help();
+            process.exit(-1);
+        }
+    }
+}
+
+function DoDownload() {
+    console.log("Downloaded " + github.LoadTokensSync(apiTokens) + " API Tokens");
+    // determines that all project have been a
+    let allRead= false;
+    // initialize and read command line arguments
+    let t = new Date().getTime() / 1000;
+    // create the reporter function
+    let report = () => {
+        console.log("---- " + DHMS(t));
+        console.log(
+            " PQ: " + PQ.length + 
+            " W: " + W.size +
+            " D: " + D.size +
+            " A: " + A.size +
+            " P: " + P + 
+            " Pe " + Percentage(Pe, P) +
+            " C: " + C + 
+            " Cu: " + Percentage(Cu, C) +
+            " S: " + S + 
+            " St: " + Percentage(St, S) +
+            " Su: " + Percentage(Su, S) 
+        );
+        console.log("D: " + GetSetItems(D, "fetchStart"));
+        console.log("W: " + GetSetItems(W, "waitStart"));
+        console.log("A: " + GetSetItems(A, "analysisStart"));
+    }
+    // create the analysis queue
+    Q = new async.queue(AnalyzeProject, numWorkers);
+    Q.drain = () => {
+        // if all projects were read and none are waiting for analysis or being cloned, we can exit 
+        if (allRead && W.size === 0 && D.size == 0) {
+            report();
+            console.log("KTHXBYE!");
+            process.exit();
+        }
+    }
+    // create the line by line reader for the input file (this may be very large so we are using line by line reader)
+    PI = new LineByLineReader(inputFile);
+    PI.on("end", () => {
+        allRead = true;
+    })
+    // when a line is read, downloads the project. Pauses the reader if too many projects are being downloaded. Skips projects according to the first & string arguments
+    PI.on("line", (line) => {
+        ++projectIndex_;
+        // if the project is smaller than first project we should look at, ignore it
+        if (projectIndex_ < first)
+            return;
+        // also ignore projects of different strides  
+        if ((projectIndex_ - first) % stride !== 0)
+            return;
+        // add the project to queue of projects to be fetched, pauses reading if too many projects are downloaded
+        PQ.push(line.split(",")[0]);
+        if (PQ.length >= PQ_MAX)
+            PI.pause();
+        // attempts to download the project immediately (pending free download slots)
+        DownloadProject();
+    });
+    // if verbose, displays summary information 
+    if (verbose) 
+        setInterval(report, 10000);
 }
 
 
@@ -195,10 +261,8 @@ function GetSetItems(set, start) {
 }
 
 function TrackFile(project, path) {
-    if (path.includes("node_modules")) {
-        // TODO mark in the project
+    if (path.includes("node_modules")) 
         return null; // denied file
-    }
     if (path.endsWith(".js") || (path.endsWith(".coffee") || (path.endsWith(".litcoffee")) || (path.endsWith(".ts"))))
         return true;
     if (path === "package.json")
@@ -224,13 +288,13 @@ function DownloadProject() {
             project.getMetadata((err) => {
                 if (err) {
                     D.delete(project);
-                    ++P; ++Pe;
+                    ++P;
                     return project.error(err, DownloadProject);
                 }
                 project.clone((err) => {
                     if (err) {
                         D.delete(project);
-                        ++P; ++Pe;
+                        ++P; 
                         return project.error(err, DownloadProject);
                     }
                     project.extras.time.fetch = new Date().getTime() / 1000 - project.extras.time.fetchStart;  
@@ -264,7 +328,7 @@ function AnalyzeProject(project, callback) {
             if (err)
                 return project.error(err, callback2);
             project.cleanup();
-            project.log("done - clone: " + project.extras.time.clone + ", analysis: " + project.extras.time.analysis + ", commits: " + project.extras.commits + ", snapshots: " + project.extras.snapshots);
+            project.log("done - fetch: " + project.extras.time.fetch + ", analysis: " + project.extras.time.analysis + ", commits: " + project.extras.commits + ", snapshots: " + project.extras.snapshots);
             callback2(null);
         })
     });
@@ -284,10 +348,8 @@ function AnalyzeBranch(project, branchName, callback) {
             let f = (err) => {
                 if (err)
                     return callback(err);
-                if (i < 0) {
-                    // TODO save the commit etc etc
+                if (i < 0)
                     return callback(null);
-                }
                 let c = new Commit(commits[i--]);
                 AnalyzeCommit(project, c, f);
             }
@@ -318,10 +380,12 @@ function AnalyzeCommit(project, commit, callback) {
                         callback(null);
                     });
                 let ch = changes[i++];
+                ++S;
+                ++project.extras.snapshots;
+                commit.files.push(ch);
                 if (TrackFile(project, ch.path)) {
-                    commit.files.push(ch);
-                    ++project.extras.snapshots;
-                    ++S;
+                    ++St;
+                    ++project.extras.trackedSnapshots;
                     if (ch.hash !== "0000000000000000000000000000000000000000") {
                         return Snapshot.Exists(ch.hash, (does) => {
                             if (does)
@@ -352,6 +416,7 @@ class Project {
             },
             commits : 0,
             snapshots: 0,
+            trackedSnapshots: 0,
         };
     }
 

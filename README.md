@@ -24,5 +24,3 @@ Make sure to increase the heap size for the process using `--max-old-space-size`
 
 
 
-
-

@@ -71,12 +71,17 @@ function main() {
         case "filter":
             filter.filter();
             return;
+        case "download":
+            downloader.Download();
+            return;
+        case "download-ginger":
+            downloader.JSGinger();
+            return;
+        case "download-orange":
+            downloader.JSOrange();
+            return;
         case "download-gh":
             downloader_api.download(apiTokens);
-            return;
-        case "download":
-            //download_all.download(apiTokens);
-            downloader.Download();
             return;
         case "git_js":
             download_all.git_js(apiTokens);

@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified \" && exit 1",
+    "create_ramdisk" : "mkdir /ramdisk && chmod 777 /ramdisk && mount -t tmpfs -o size=8g tmpfs /ramdisk",
+    "umount_ramdisk" : "umount /ramdisk && rm -rf /ramdisk",
+    "download": "node --stack-size=1024000000 index.js download",
+    "download_orange" : "node --stack-size=1024000000 index.js download /home/peta/github-tokens.json /home/peta/projects-js.csv /home/peta/jsdownload --verbose --max-workers=80 --max-w=10 --stride=100 --skip-existing --tmp-dir=/ramdisk ",
+    "download_ginger" : "node --stack-size=1024000000 index.js download /home/peta/github-tokens.json /home/peta/projects-js.csv /home/peta/jsdownload --verbose --max-workers=80 --max-w=10 --stride=100 --skip-existing --tmp-dir=/ramdisk "
   },
   "author": "",
   "license": "ISC",

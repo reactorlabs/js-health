@@ -68,49 +68,6 @@ module.exports = {
         ProcessCommandLine();
         DoDownload();
     },
-
-    JSOrange : () => {
-        apiTokens = "/home/peta/github-tokens.json";
-        inputFile = "/home/peta/projects-js.csv";
-        outputDir = "/home/peta/jsdownload";
-        verbose = true;
-        numWorkers = 80;
-        W_MAX = 10;
-        stride = 100;
-        skipExisting = true;
-        first = parseInt(process.argv[3]);
-        DoDownload();
-    },
-
-    JSOrange : () => {
-        apiTokens = "/home/peta/github-tokens.json";
-        inputFile = "/home/peta/projects-js.csv";
-        outputDir = "/home/peta/jsdownload";
-        tmpDir = "/ramdisk"
-        verbose = true;
-        numWorkers = 80;
-        W_MAX = 10;
-        stride = 100;
-        skipExisting = true;
-        first = parseInt(process.argv[3]);
-        DoDownload();
-    },
-
-    JSGinger : () => {
-        apiTokens = "/home/peta/github-tokens.json";
-        inputFile = "/home/peta/projects-js.csv";
-        outputDir = "/home/peta/jsdownload";
-        tmpDir = "/ramdisk";
-        verbose = true;
-        numWorkers = 16;
-        W_MAX = 10;
-        stride = 100;
-        skipExisting = true;
-        first = parseInt(process.argv[3]);
-        DoDownload();
-    }
-    
-
 }
 
 
@@ -478,6 +435,7 @@ class Project {
         }, (err, path) => {
             if (err)
                 return callback(err);
+            path = first + "_" + path; // prefix with first so that we can easily delete old projects
             mkdirp(path, (err) => {
                 if (err)
                     return callback(err);

@@ -128,7 +128,7 @@ function ProcessCommandLine() {
 function DoDownload() {
     if (clearTmp) {
 	console.log("Clearing temp directory...");
-	child_process.execSync("rm rf " + tmpDir + "/*");
+	child_process.execSync("rm -rf " + tmpDir + "/*");
     }
     console.log("Downloaded " + github.LoadTokensSync(apiTokens) + " API Tokens");
     // determines that all project have been a

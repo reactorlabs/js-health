@@ -10,7 +10,7 @@
       "umount_ramdisk" : "umount /ramdisk && rm -rf /ramdisk",
       "download": "node --stack-size=1024000000 index.js download",
       "download_orange" : "node --stack-size=1024000000 index.js download /home/peta/jsdownload/github-tokens.json /home/peta/jsdownload/projects-js.csv /home/peta/jsdownload --verbose --max-workers=80 --max-w=10 --stride=100 --skip-existing --clear-tmp ",
-      "download_ginger" : "node --stack-size=1024000000 index.js download /home/peta/github-tokens.json /home/peta/projects-js.csv /home/peta/jsdownload --verbose --max-workers=80 --max-w=10 --stride=100 --skip-existing --clear-tmp "
+      "download_ginger" : "node --stack-size=1024000000 index.js download /mnt/data/jsd/github-tokens.json /mnt/data/jsd/projects-js.csv /mnt/data/jsd/output --verbose --max-workers=80 --max-w=10 --stride=100 --skip-existing --clear-tmp "
   },
   "author": "",
   "license": "ISC",

@@ -10,7 +10,7 @@
             "request": "launch",
             "name": "Launch Program",
             "program": "${workspaceRoot}/index.js",
-            "args": [ "download", "/home/peta/github-tokens.json", "/home/peta/projects-js-small.csv", "/home/peta/jsdownload", "--verbose", "--max-workers=24", "--max-w=10", "--tmp-dir=/ramdisk"]
+            "args": [ "download", "/home/peta/github-tokens.json", "/home/peta/projects-js-small.csv", "/home/peta/jsd", "--verbose", "--max-workers=1", "--max-w=1", "--stride=10"]
             //"args": [ "filter", "/home/peta/projects.csv", "/home/peta/projects-js.csv", "JavaScript", "CoffeeScript", "TypeScript"]            
         }
     ]

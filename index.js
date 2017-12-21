@@ -85,14 +85,11 @@ function main() {
         case "git_js":
             download_all.git_js(apiTokens);
             return;
-<<<<<<< HEAD
 	case "downloadTestProjects":
 	    test_runner.downloadTestProjects(apiTokens);
 	case "git_js":
 	    download_all.git_js(apiTokens);
 	    return;
-=======
->>>>>>> api-only
         case "topStars":
             download_stars.download(apiTokens);
             break;

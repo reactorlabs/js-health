@@ -32,12 +32,20 @@ Make sure to increase the heap size for the process using `--max-old-space-size`
 
 First, the initial data must be downloaded. In our setting this means getting all Github projects for the specified language one by one and analyzing all their commits, saving the snapshots along the way. Note that depending on your language, this step might take *a lot* of time and require a lot of network bandwidth and disk space. This task is also IO bound so downloading the repositories on a fast SSD drive is highly recommended. 
 
-    node download TOKENS INPUT OUTPUT
+    node download INPUT OPTIONS
 
-where `TOKENS` is path to a JSON file containing github API tokens that should be used to download the metadata, `INPUT` is path to the projects file (output of step `1`) and `OUTPUT` is path to the directory where the outputs will be saved. Additional arguments include:
+where `INPUT` is the input file containing all projects to be downloaded and analyzed and `OPTIONS` are any of the following:
 
+- `--out-dir` specifies the output directory
 - `--verbose` displays a summary statistics each 10 seconds
 - `--skip-existing` makes sure that projects which have already been analyzed will not be reanalyzed again (ignoring whether they have changed since the analysis or not)
+- `--tmp-dir=` - specifies the temporary directory which is used to clone the projects
+- `--clear-tmp-dir` - clears the contents of the tmp dir before start (useful for restarting failed runs)
+- `--github-tokens=` - specifies the JSON file containing github tokens that should be used by the downloader when fetching the metadata
+- `--first=` - specifies index of the first project to be downloaded
+- `--stride=` - specifies the stride length for distributed computations
+- `--max-pq=` - specifies the number of packages that can be prefetched and the number of packages that can be in the waiting queue for analysis
+- `--max-w=` - specifies the number of projects that can be processed in parallel  
 
 The downloader creates the following folders in the output directory:
 

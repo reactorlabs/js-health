@@ -1,11 +1,27 @@
 const fs = require("fs");
 const request = require("request");
 
+let tokensFile = "github-tokens.json"; // file containing github API Tokens that can be used by the downloader
+
 module.exports = {
+
+    ParseArguments : (args) => {
+        for (let i = 0; i < args.length; ++i) {
+            if (args[i].startsWith("--github-tokens=")) {
+                tokensFile = args[i].substr(16);
+            } else {
+                continue;
+            }
+            args.splice(i, 1);
+        }
+        console.log("github.tokensFile = " + tokensFile);
+    },
+
     /** Loads the api tokens from given file.
      */
-    LoadTokensSync : (filename) => {
-        tokens = JSON.parse(fs.readFileSync(filename));
+    LoadTokensSync : () => {
+        tokens = JSON.parse(fs.readFileSync(tokensFile));
+        console.log("loaded " + tokens.length + " Github API tokens");
         return tokens.length;
     },
 

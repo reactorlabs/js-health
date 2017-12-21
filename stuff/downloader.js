@@ -7,12 +7,10 @@ const LineByLineReader = require("line-by-line");
 
 const git = require("./git.js");
 const github = require("./github.js");
+const data = require("./data.js");
 
 let apiTokens = ""; // file where the github api tokens for downloading metadata can be located
 let inputFile = ""; // input file with lists of projects to download & analyze
-let outputDir = ""; // output directory
-let tmpDir = "/tmp"; // location of the temporary directory, a ramdisk is suggested
-let clearTmp = false; // clear the temp directory contents before starting
 let skipExisting = false; // if true, projects already downloaded properly will be skipped
 let stride = 1; // stride of analyzed projects for easy distribution and parallelism
 let first = 0; // first project to analyze
@@ -42,29 +40,6 @@ let projectIndex_ = 0; // index of currently read project from the input file
 
 module.exports = {
 
-    Help: () => {
-        console.log("")
-        console.log("download TOKENS INPUT_FILE OUTPUT_DIR [OPTS]");
-        console.log("    TOKENS = file where GitHub API tokens are located")
-        console.log("    INPUT_FILE = csv file produced byt filter_projects stage with files to analyze");
-        console.log("    OUTPUT_DIR = directory where the outputs will be stored (see below)")
-        console.log("");
-        console.log("Reads all projects in the input file, clones them and analyzes their commits on the main branch,")
-        console.log("adding any new snapshots, commits, or projects to the output directory.")
-        console.log("");
-        console.log("Optional arguments:")
-        console.log("")
-        console.log("    --skip-existing - skips already downloaded projects")
-        console.log("    --verbose - displays extra information every 10 seconds")
-        console.log("    --first=N - sets index of the first project to analyze")
-        console.log("    --stride=N - sets stride value for distributed analysis")
-        console.log("    --max-pq=N - sets number of filenames to preload");
-        console.log("    --max-w=N - sets number of prefetched projects");
-        console.log("    --tmp-dir=PATH - sets the location of temporary directory")
-	console.log("    --clear-tmp - clears the tmp dir before starting")
-        console.log("    --max-workers=N - sets the number of simultaneously analyzed projects")
-    },
-
     /** Full fledged   */
     Download : () => {
         ProcessCommandLine();
@@ -74,63 +49,51 @@ module.exports = {
 
 
 function ProcessCommandLine() {
-    if (process.argv.length < 6) {
+    let args = process.argv.slice(3);
+    data.ParseArguments(args);
+    github.ParseArguments(args);
+
+    if (args.length < 2) {
         console.log("Invalid number of arguments");
-        module.exports.Help();
+        console.log("see README.md");
         process.exit(-1);
     }
-    apiTokens = process.argv[3];
-    console.log("- github api tokens: " + apiTokens);
-    inputFile = process.argv[4];
-    console.log("- input file : " + inputFile);
-    outputDir = process.argv[5];
-    if (! outputDir.endsWith("/"))
-        outputDir += "/";
-    console.log("- output dir: " + outputDir);
-    for (let i = 6; i < process.argv.length; ++i) {
-        let arg = process.argv[i];
+    inputFile = args[0];
+    for (let i = 1; i < args.length; ++i) {
+        let arg = args[i];
         if (arg == "--skip-existing") {
             skipExisting = true;
-            console.log("- skiping existing projects");
-	    
-        } else if (arg === "--clear-tmp") {
-	    clearTmp = true;
-	    console.log("- tmp directory will be cleared");
-	} else if (arg === "--verbose") {
+    	} else if (arg === "--verbose") {
             verbose = true;
-            console.log("- verbose mode enabled");
         } else if (arg.startsWith("--first=")) {
             first = parseInt(arg.substr(8));
-            console.log("- first project id: " + first);
         } else if (arg.startsWith("--stride=")) {
             stride = parseInt(arg.substr(9));
-            console.log("- stride : " + stride);
         } else if (arg.startsWith("--max-pq=")) {
             PQ_MAX = parseInt(arg.substr(9));
-            console.log("- max-pq: " + PQ_MAX);
         } else if (arg.startsWith("--max-w=")) {
             W_MAX = parseInt(arg.substr(8));
-            console.log("- max-w: " + W_MAX);
-        } else if (arg.startsWith("--tmp-dir=")) {
-            tmpDir = arg.substr(10);
-            console.log("- temporary directory: " + tmpDir);
         } else if (arg.startsWith("--max-workers=")) {
             numWorkers = parseInt(arg.substr(14));
-            console.log("- number of workers: " + numWorkers);
         } else {
             console.log("unknown argument: " + arg);
-            module.exports.Help();
+            console.log("see README.md");
             process.exit(-1);
         }
     }
+    console.log("downloader.inputFile = " + inputFile);
+    console.log("downloader.skipExisting = " + skipExisting);
+    console.log("downloader.verbose = " + verbose);
+    console.log("downloader.first = " + first);
+    console.log("downloader.stride = " + stride);
+    console.log("downloader.maxPq = " + PW_MAX);
+    console.log("downloader.maxW = " + W_MAX);
+    console.log("downloader.maxWorkers = " + numWorkers);
 }
 
-function DoDownload() {
-    if (clearTmp) {
-	console.log("Clearing temp directory...");
-	child_process.execSync("rm -rf " + tmpDir + "/*");
-    }
-    console.log("Downloaded " + github.LoadTokensSync(apiTokens) + " API Tokens");
+function DoDownload()  {
+    data.ClearTmpDirSync();
+    github.LoadTokensSync();
     // determines that all project have been a
     let allRead= false;
     // initialize and read command line arguments
@@ -240,7 +203,7 @@ function TrackFile(project, path) {
 
 function DownloadProject() {
     if (W.size < W_MAX && D.size < W_MAX && PQ.length > 0) {
-        let project = new Project(PQ.shift());
+        let project = new data.Project(PQ.shift());
         project.extras.time.fetchStart = new Date().getTime() / 1000,
         D.add(project);
         if (PQ.length < PQ_MAX)
@@ -317,7 +280,7 @@ function AnalyzeBranch(project, branchName, callback) {
                     return callback(err);
                 if (i < 0)
                     return callback(null);
-                let c = new Commit(commits[i--]);
+                let c = new data.Commit(commits[i--]);
                 AnalyzeCommit(project, c, f);
             }
             f(null);
@@ -354,10 +317,10 @@ function AnalyzeCommit(project, commit, callback) {
                     ++St;
                     ++project.extras.trackedSnapshots;
                     if (ch.hash !== "0000000000000000000000000000000000000000") {
-                        return Snapshot.Exists(ch.hash, (does) => {
+                        return data.Snapshot.Exists(ch.hash, (does) => {
                             if (does)
                                 return f(null);
-                            Snapshot.SaveAs(project, ch.hash, (err) => {
+                            data.Snapshot.SaveAs(project, ch.hash, (err) => {
                                 if (err)
                                     return callback(err);
                                 ++Su;
@@ -373,195 +336,5 @@ function AnalyzeCommit(project, commit, callback) {
     });
 }
 
-class Project {
-    constructor (fullName) {
-        this.fullName = fullName;
-        this.branches = {};
-        this.extras = {
-            time : {
-
-            },
-            commits : 0,
-            snapshots: 0,
-            trackedSnapshots: 0,
-        };
-    }
-
-    exists(callback) {
-        let path = Project.GetPath_(this.fullName);
-        fs.access(path.dir + path.filename, (err) => {
-            if (err)
-                callback(false);
-            else
-                callback(true);
-        });
-    }
-
-    save(callback) {
-        let data = {
-            fullName : this.fullName,
-            branches : this.branches,
-            extras : this.extras,
-            metadata : this.metadata,
-        }
-        let path = Project.GetPath_(this.fullName);
-        mkdirp(path.dir, (err) => {
-            if (err)
-                return callback(err);
-            fs.writeFile(path.dir + path.filename, JSON.stringify(data), callback);
-        })
-    }
-
-    cleanup() {
-        if (this.localDirCleanup)
-            this.localDirCleanup();
-    }
-
-    error(err, callback) {
-        ++Pe;
-        console.log("! " + this.fullName + ": " + err);
-        this.cleanup();
-        callback(err);
-    }
-
-    log(message) {
-        console.log("> " + this.fullName + ": " + message);
-    }
-
-    getMetadata(callback) {
-        let p = this;
-        github.Request("repos/" + this.fullName, (err, data) => {
-            if (err)
-                return callback(err);
-            p.metadata = data;
-            callback(null);
-        });
-    }
-
-    clone(callback) {
-        let p = this;
-        tmp.tmpName({
-            dir : tmpDir,
-        }, (err, path) => {
-            if (err)
-                return callback(err);
-            mkdirp(path, (err) => {
-                if (err)
-                    return callback(err);
-                p.localDir = path;
-                p.localDirCleanup = () => {
-                    child_process.exec("rm -rf " + path, (err, cout, cerr) => {});
-                }
-                git.Clone(this,callback);
-            });
-        });
-    }
-
-    static GetPath_(fullName) {
-        let filename = "";
-        for (let i = 0; i < fullName.length; ++i) {
-            let x = fullName[i];
-            if (
-                (x >= '0' && x < '9') ||
-                (x >= 'a' && x < 'z') ||
-                (x >= 'A' && x < 'Z') ||
-                (x == '-')
-            ) {
-                filename += x;
-            } else {
-                filename = filename + '_';
-                x = x.charCodeAt(0);
-                let xx = Math.floor(x / 16);
-                filename += xx.toString(16);
-                xx = x % 16;
-                filename += xx.toString(16);
-            }
-        }
-
-        return {
-            dir : outputDir + "projects/" + filename.substr(0,3) + "/",
-            filename: filename,
-        };
-    }
-}
-
-class Commit {
-    constructor (c) {
-        this.hash = c.hash;
-        this.parents = c.parents;
-        this.files = [];
-        this.info = {
-            date : c.date,
-            author : c.author,
-            authorEmail : c.authorEmail,
-            message : c.message,
-        }
-        this.extras = {};
-    }
-
-    exists(callback) {
-        let p = Commit.GetPath_(this.hash);
-        fs.access(p.dir + p.filename, (err) => {
-            if (err)
-                callback(false);
-            else
-                callback(true);
-        });
-    }
-
-    save(callback) {
-        let data = {
-            hash : this.hash,
-            parents : this.parents,
-            files : this.files,
-            info : this.info,
-            extras : this.extras,
-        }
-        let path = Commit.GetPath_(this.hash);
-        mkdirp(path.dir, (err) => {
-            if (err)
-                return callback(err);
-            fs.writeFile(path.dir + path.filename, JSON.stringify(data), callback);
-        });
-    }
-
-    static GetPath_(hash) {
-        return {
-            dir : outputDir + "commits/" + hash.substr(0,2) + "/" + hash.substr(2,2) + "/",
-            filename : hash.substr(4),
-        };
-    }
-}
-
-class Snapshot {
-
-    static Exists(hash, callback) {
-        let path = Snapshot.GetPath_(hash);
-        fs.access(path.dir, (err) => {
-            if (err)
-                callback(false);
-            else
-                callback(true);
-        })
-    }
-
-    static SaveAs(project, hash, callback) {
-        let path = Snapshot.GetPath_(hash);
-        mkdirp(path.dir, (err) => {
-            if (err)
-                return callback(err);
-            git.SaveSnapshot(project, hash, path.dir + path.filename, callback);
-        })
-    }
-
-    static GetPath_(hash) {
-        return {
-            dir : outputDir + "snapshots/" + hash.substr(0, 2) + "/" + hash.substr(2,2) + "/",
-            filename : hash.substr(4),
-        };
-    }
-
-
-}
 
 

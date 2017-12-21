@@ -149,7 +149,7 @@ function DoDownload() {
             " Cu: " + Percentage(Cu, C) +
             " S: " + S + 
             " St: " + Percentage(St, S) +
-            " Su: " + Percentage(Su, S) 
+            " Su: " + Percentage(Su, St) 
         );
         console.log("D: " + GetSetItems(D, "fetchStart"));
         console.log("W: " + GetSetItems(W, "waitStart"));

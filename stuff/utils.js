@@ -49,7 +49,6 @@ module.exports = {
         console.log("TOTAL UNIQUE DEPENDENCIES: " + freqs.length);
     },
 
-
     isFile: function (path) {
         return fs.existsSync(path) && fs.statSync(path).isFile();
     },

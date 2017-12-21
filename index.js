@@ -8,6 +8,9 @@ const download_stars = require("./stuff/download_stars.js");
 const test_runner = require("./stuff/test_runner.js");
 const download_all = require("./stuff/download_all.js");
 const sift = require("./stuff/type_sorter.js");
+const downloader_api = require("./stuff/downloader_api.js");
+const filter = require("./stuff/projects_filter.js");
+const downloader = require("./stuff/downloader.js");
 
 apiTokens = [
     "36df491663476ff4a13d53188253d43b5ef6d3c9",
@@ -32,7 +35,7 @@ apiTokens = [
     "60ae2dbdfcd0023ce41d67ef0a49805aae3c80b2",
     "a0a5e516fb26bbe639dd6674972741c2b2243a8c",
     "81589da5c47794358a3b0e07307f90a420595629",
-    "87e726374c61e399466dacf2d462c5f96205d0e5",
+    //"87e726374c61e399466dacf2d462c5f96205d0e5",
     "c44c3241c7ccb284a3d9661d65e8ceecffab4e5b",
     "a05a3989285f7c6fc463c77c35a86c6095e72945",
     "e0fb6a7a249566d695f3cc9ab7c148864497775d",
@@ -64,14 +67,32 @@ function main() {
 
     let action = process.argv[2];
     switch (action) {
-        case "download":
-            download_all.download(apiTokens);
+        case "filter":
+            filter.filter();
             return;
+        case "download":
+            downloader.Download();
+            return;
+        case "download-ginger":
+            downloader.JSGinger();
+            return;
+        case "download-orange":
+            downloader.JSOrange();
+            return;
+        case "download-gh":
+            downloader_api.download(apiTokens);
+            return;
+        case "git_js":
+            download_all.git_js(apiTokens);
+            return;
+<<<<<<< HEAD
 	case "downloadTestProjects":
 	    test_runner.downloadTestProjects(apiTokens);
 	case "git_js":
 	    download_all.git_js(apiTokens);
 	    return;
+=======
+>>>>>>> api-only
         case "topStars":
             download_stars.download(apiTokens);
             break;

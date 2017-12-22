@@ -23,7 +23,7 @@ Currently, we use [ghtorrent](http://http://ghtorrent.org/) as the source of pro
 
 First check out the date of the snapshot you want to use, such as `2017-12-01` and then run the following:
 
-    npm start ghtorrent -- NAME OUTDIR [--discard-data]
+    npm run ghtorrent -- NAME OUTDIR [--discard-data]
 
 Where `NAME` is the date of the snapshot in the `yyyy-mm-dd` form and `OUTDIR` is the output directory where the results should be downloaded. If `--discard-data` is present, then the snapshot will be deleted after the step. 
 
@@ -36,7 +36,7 @@ The script downloads the snapshot, extracts the `projects.csv` from it in the `O
 
 Once we have the `projects.csv` file, we must filter projects of only the language(s) we are interested in. This is done in the filter step, which can be executed as follows:
 
-    npm start filter -- INPUT OUTPUT --language=LANG [--no-forks]
+    npm run filter -- INPUT OUTPUT --language=LANG [--no-forks]
 
 where `INPUT` is absolute path to the `projects.csv` extracted from ghtorreent, `OUTPUT` is absolute path to a file that would contain only the filtered projects. To specify which language specification should be used, pass the language name to the `--language` argument. The optional `--noforks` argument filters out any forked projects if used.
 
@@ -80,7 +80,17 @@ For the download `D`, waiting `W` and analysis `A` stages, list of current proje
 
 
 
+# Language Specific Tasks
 
+## JavaScript
+
+### Downloading registry of NPM packages
+
+To download the NPM registry (a JSON file containing information about each NPM package), run the following:
+
+    npm run download_npm_registry -- OUTPUT
+
+where `OUTPUT` is path to the file where you want the registry to be stored. 
 
 
 

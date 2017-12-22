@@ -17,6 +17,8 @@ let first = 0; // first project to analyze
 let PQ_MAX = 100; // max number of preloaded project names
 let W_MAX = 0; // max projects that can wait for analysis simultaneously (or be downloaded at the same time)
 let numWorkers = 1; // number of workers
+let langspec = null; // language specific settings
+
 
 let PQ = []; // project names queued for download
 let PI = null; // input file with projects to analyze 
@@ -75,18 +77,27 @@ function ProcessCommandLine() {
             W_MAX = parseInt(arg.substr(8));
         } else if (arg.startsWith("--max-workers=")) {
             numWorkers = parseInt(arg.substr(14));
+        } if (process.argv[i].startsWith("--language=")) {
+            let lang = process.argv[i].substr(11);
+            if (langspec !== null) {
+                console.log("Language can be specified only once");
+                console.log("read README.md");
+                process.exit(-1);
+            }
+            langspec = require("../languages/" + lang + ".js");
         } else {
             console.log("unknown argument: " + arg);
             console.log("see README.md");
             process.exit(-1);
         }
     }
+    console.log("downloader.langspec = " + langspec.Name());
     console.log("downloader.inputFile = " + inputFile);
     console.log("downloader.skipExisting = " + skipExisting);
     console.log("downloader.verbose = " + verbose);
     console.log("downloader.first = " + first);
     console.log("downloader.stride = " + stride);
-    console.log("downloader.maxPq = " + PW_MAX);
+    console.log("downloader.maxPq = " + PQ_MAX);
     console.log("downloader.maxW = " + W_MAX);
     console.log("downloader.maxWorkers = " + numWorkers);
 }
@@ -103,8 +114,8 @@ function DoDownload()  {
         console.log("---- " + DHMS(t));
         console.log(
             " PQ: " + PQ.length + 
-            " W: " + W.size +
             " D: " + D.size +
+            " W: " + W.size +
             " A: " + A.size +
             " P: " + P + 
             " Pe " + Percentage(Pe, P) +
@@ -188,17 +199,6 @@ function GetSetItems(set, start) {
     let result = "";
     set.forEach((item) => { result += " " + item.fullName + "(" + HMS(item.extras.time[start]) + ")"});
     return result.substr(1);
-}
-
-function TrackFile(project, path) {
-    if (path.includes("node_modules")) 
-        return null; // denied file
-    if (path.endsWith(".js") || (path.endsWith(".coffee") || (path.endsWith(".litcoffee")) || (path.endsWith(".ts"))))
-        return true;
-    if (path === "package.json")
-        return true;
-    // TODO perhaps add gulpfiles, gruntfiles, travis, etc. ?
-    return false;
 }
 
 function DownloadProject() {
@@ -313,7 +313,7 @@ function AnalyzeCommit(project, commit, callback) {
                 ++S;
                 ++project.extras.snapshots;
                 commit.files.push(ch);
-                if (TrackFile(project, ch.path)) {
+                if (langspec.TrackFile(project, ch.path)) {
                     ++St;
                     ++project.extras.trackedSnapshots;
                     if (ch.hash !== "0000000000000000000000000000000000000000") {

@@ -7,6 +7,8 @@
     "test": "echo \"Error: no test specified \" && exit 1",
     "create_ramdisk_10": "mkdir /ramdisk && chmod 777 /ramdisk && mount -t tmpfs -o size=10g tmpfs /ramdisk",
     "umount_ramdisk": "umount /ramdisk && rm -rf /ramdisk",
+    "ghtorrent" : "node index.js ghtorrent",
+    "filter" : "node --max-old-space-size=8192 index.js filter",
     "download": "node --stack-size=1024000000 index.js download",
     "download_orange": "node --stack-size=1024000000 index.js download /home/peta/jsdownload/projects-js.csv --verbose --max-workers=80 --max-w=10 --stride=100 --skip-existing --clear-tmp-dir --github-tokens=/home/peta/jsdownload/github-tokens.json --out-dir=/home/peta/jsdownload ",
     "download_ginger": "node --stack-size=1024000000 index.js download /mnt/data/jsd/projects-js.csv --verbose --max-workers=80 --max-w=10 --stride=100 --skip-existing --clear-tmp --github-tokens=/mnt/data/jsd/github-tokens.json --out-dir=/mnt/data/jsd/output "

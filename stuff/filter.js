@@ -16,23 +16,37 @@ var forkedProjects = 0;
 var validProjects = 0;
 var seenProjects = {};
 
+var langspec = null;
+
 
 module.exports = {
 
-    help: function() {
-        // usage input file, output file, languages --noforks 
-    },
-
-    filter: function() {
+    Filter: function() {
         // get the arguments
         input = process.argv[3];
         output = process.argv[4];
         for (let i = 5; i < process.argv.length; ++i) {
-            if (process.argv[i] == "--noforks")
+            if (process.argv[i] == "--no-forks") {
                 forks = false;
-            else
-                languages[process.argv[i]] = process.argv[i];
+            } if (process.argv[i].startsWith("--language=")) {
+                let lang = process.argv[i].substr(11);
+                if (langspec !== null) {
+                    console.log("Language can be specified only once");
+                    console.log("read README.md");
+                    process.exit(-1);
+                }
+                langspec = require("../languages/" + lang + ".js");
+                for (let l of langspec.ProjectLanguages())
+                    languages[l] = l;
+            } else {
+                console.log("Unknown argument " + process.argv[i]);
+                process.exit(-1);
+            }
         }
+
+        console.log("filter.langspec = " + langspec.Name());
+        console.log("filter.forks = " + forks);
+        
         // create the parser, specify escape character so that it would correctly parse the projects...
         var parser = csv_parser({escape : '\\' })
 

@@ -34,6 +34,25 @@ class Project {
         });
     }
 
+
+    load(callback) {
+	let p = this;
+	let path = Project.GetPath_(this.fullName);
+	fs.readFile(path.dir + path.filename, (err, data) => {
+	    if (err)
+		return callback(err);
+	    try {
+	        data = JSON.parse(data);
+	    } catch (e) {
+		return callback(e);
+	    }
+	    this.branches = data.branches;
+	    this.extras = data.extras;
+	    this.metadata = data.metadata;
+	    callback(null);
+	})
+    }
+    
     save(callback) {
         let data = {
             fullName : this.fullName,
@@ -55,8 +74,7 @@ class Project {
     }
 
     error(err, callback) {
-        ++Pe;
-        console.log("! " + this.fullName + ": " + err);
+        //console.log("! " + this.fullName + ": " + err);
         this.cleanup();
         callback(err);
     }
@@ -94,6 +112,23 @@ class Project {
         });
     }
 
+    static Demangle(name) {
+	let result = "";
+	for (let i = 0; i < name.length; ++i) {
+	    let x = name[i];
+	    if (x === '_') {
+		let hi = name.charCodeAt(i + 1);
+		let lo = name.charCodeAt(i + 2);
+		hi = (hi >= 97) ? hi - 87 : hi - 48;
+		lo = (lo >= 97) ? lo - 87 : lo - 48;
+		i += 2;
+		x = String.fromCharCode(hi * 16 + lo);
+	    }
+	    result += x;
+	}
+	return result;
+    }
+
     static GetPath_(fullName) {
         let filename = "";
         for (let i = 0; i < fullName.length; ++i) {
@@ -125,15 +160,21 @@ class Project {
 class Commit {
 
     constructor (c) {
-        this.hash = c.hash;
-        this.parents = c.parents;
-        this.files = [];
-        this.info = {
-            date : c.date,
-            author : c.author,
-            authorEmail : c.authorEmail,
-            message : c.message,
-        }
+	if (typeof c === "string") {
+	    this.hash = c;
+	    this.parents = [];
+	    this.info = {};
+	} else {
+            this.hash = c.hash;
+            this.parents = c.parents;
+            this.info = {
+                date : c.date,
+                author : c.author,
+                authorEmail : c.authorEmail,
+                message : c.message,
+            }
+	}
+	this.files = [];
         this.extras = {};
     }
 
@@ -145,6 +186,24 @@ class Commit {
             else
                 callback(true);
         });
+    }
+
+    load(callback) {
+	let p = Commit.GetPath_(this.hash);
+	fs.readFile(p.dir + p.filename, (err, data) => {
+	    if (err)
+		return callback(err);
+	    try {
+	        data = JSON.parse(data);
+	    } catch (e) {
+		return callback(e);
+	    }
+	    this.parents = data.parents;
+	    this.files = data.files;
+	    this.info = data.info;
+	    this.extras = data.extras;
+	    callback(null);
+	})
     }
 
     save(callback) {
@@ -175,7 +234,7 @@ class Snapshot {
 
     static Exists(hash, callback) {
         let path = Snapshot.GetPath_(hash);
-        fs.access(path.dir, (err) => {
+        fs.access(path.dir + path.filename, (err) => {
             if (err)
                 callback(false);
             else
@@ -225,7 +284,7 @@ module.exports = {
     },
 
     ParseArguments : (args) => {
-        for (let i = 0; i < args.length; ++i) {
+        for (let i = 0; i < args.length;) {
             if (args[i].startsWith("--out-dir=")) {
                 outputDir = args[i].substr(10);
                 if (!outputDir.endsWith("/"))
@@ -237,6 +296,7 @@ module.exports = {
             } else if (args[i] === "--clear-tmp-dir") {
                 clearTmpDir = true;
             } else {
+		++i;
                 continue;
             }
             args.splice(i, 1);

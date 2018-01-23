@@ -19,6 +19,9 @@ let W_MAX = 0; // max projects that can wait for analysis simultaneously (or be 
 let numWorkers = 1; // number of workers
 let langspec = null; // language specific settings
 
+let verbose = false;
+
+let blacklistedProjects = {}; // list of blacklisted projects that should not be analyzed or downloaded
 
 let PQ = []; // project names queued for download
 let PI = null; // input file with projects to analyze 
@@ -47,6 +50,12 @@ module.exports = {
         ProcessCommandLine();
         DoDownload();
     },
+
+    /** Runner is like the downloader, but executes the downloader script repeatedly until it is done and automatically blacklists failing projects.
+     */
+    Runner : () => {
+	
+    }
 }
 
 
@@ -77,14 +86,18 @@ function ProcessCommandLine() {
             W_MAX = parseInt(arg.substr(8));
         } else if (arg.startsWith("--max-workers=")) {
             numWorkers = parseInt(arg.substr(14));
-        } if (process.argv[i].startsWith("--language=")) {
-            let lang = process.argv[i].substr(11);
+        } else if (arg.startsWith("--language=")) {
+            let lang = arg.substr(11);
             if (langspec !== null) {
                 console.log("Language can be specified only once");
                 console.log("read README.md");
                 process.exit(-1);
             }
             langspec = require("../languages/" + lang + ".js");
+        } else if (arg.startsWith("--blacklist=")) {
+	    let filename = arg.substr(12);
+	    if (fs.existsSync(filename))
+  	        blacklistedProjects = JSON.parse(fs.readFileSync(filename));
         } else {
             console.log("unknown argument: " + arg);
             console.log("see README.md");
@@ -100,6 +113,7 @@ function ProcessCommandLine() {
     console.log("downloader.maxPq = " + PQ_MAX);
     console.log("downloader.maxW = " + W_MAX);
     console.log("downloader.maxWorkers = " + numWorkers);
+    console.log("downloader.blacklistedProjects = " + Object.keys(blacklistedProjects).length);
 }
 
 function DoDownload()  {
@@ -153,8 +167,12 @@ function DoDownload()  {
         // also ignore projects of different strides  
         if ((projectIndex_ - first) % stride !== 0)
             return;
+	// get the project name and see if the project is blacklisted
+	let pname = line.split(",")[0];
+	if (blacklistedProjects[pname])
+	    return;
         // add the project to queue of projects to be fetched, pauses reading if too many projects are downloaded
-        PQ.push(line.split(",")[0]);
+        PQ.push(pname);
         if (PQ.length >= PQ_MAX)
             PI.pause();
         // attempts to download the project immediately (pending free download slots)
@@ -164,8 +182,6 @@ function DoDownload()  {
     if (verbose) 
         setInterval(report, 10000);
 }
-
-
 
 function Percentage(value, max) {
     return value + " (" + Math.trunc(value/ max * 10000) / 100 + "%)"
@@ -201,6 +217,11 @@ function GetSetItems(set, start) {
     return result.substr(1);
 }
 
+function Error(project, err, callback) {
+    ++Pe;
+    project.error(err, callback);
+}
+
 function DownloadProject() {
     if (W.size < W_MAX && D.size < W_MAX && PQ.length > 0) {
         let project = new data.Project(PQ.shift());
@@ -211,24 +232,24 @@ function DownloadProject() {
         project.exists((does) => {
             if (does && skipExisting) {
                 D.delete(project);
-                project.log("skipped");
+                //project.log("skipped");
                 return DownloadProject();
             }
-            project.log("fetching...");
+            //project.log("fetching...");
             project.getMetadata((err) => {
                 if (err) {
                     D.delete(project);
                     ++P;
-                    return project.error(err, DownloadProject);
+                    return Error(project, err, DownloadProject);
                 }
                 project.clone((err) => {
                     if (err) {
                         D.delete(project);
                         ++P; 
-                        return project.error(err, DownloadProject);
+                        return Error(project, err, DownloadProject);
                     }
                     project.extras.time.fetch = new Date().getTime() / 1000 - project.extras.time.fetchStart;  
-                    project.log("scheduling...")
+                    //project.log("scheduling...")
                     project.extras.time.waitStart = new Date().getTime() / 1000;
                     D.delete(project);
                     W.add(project);
@@ -241,6 +262,7 @@ function DownloadProject() {
 
 function AnalyzeProject(project, callback) {
     W.delete(project);
+    // since we have removed the project from waiting queue, see if there is some more projects to download
     DownloadProject();
     project.extras.time.analysisStart = new Date().getTime() / 1000;
     // this is here if we ever want to download more branches
@@ -250,15 +272,19 @@ function AnalyzeProject(project, callback) {
         A.delete(project);
         callback(err);
     }
+    // log that we have started analyzing the project
+    console.log("+" + project.fullName);
     AnalyzeBranch(project, project.metadata.default_branch, (err) => {
         if (err)
             return project.error(err, callback2);
         project.extras.time.analysis = new Date().getTime() / 1000 - project.extras.time.analysisStart;
         project.save((err) => {
             if (err)
-                return project.error(err, callback2);
+                return Error(project, err, callback2);
             project.cleanup();
-            project.log("done - fetch: " + project.extras.time.fetch + ", analysis: " + project.extras.time.analysis + ", commits: " + project.extras.commits + ", snapshots: " + project.extras.snapshots);
+	    // log that we have closed analysis of the project successfully
+	    console.log("-" + project.fullName);
+            //project.log("done - fetch: " + project.extras.time.fetch + ", analysis: " + project.extras.time.analysis + ", commits: " + project.extras.commits + ", snapshots: " + project.extras.snapshots);
             callback2(null);
         })
     });
@@ -266,7 +292,7 @@ function AnalyzeProject(project, callback) {
 }
 
 function AnalyzeBranch(project, branchName, callback) {
-    project.log("analyzing branch " + branchName)
+    //project.log("analyzing branch " + branchName)
     git.GetLatestCommit(project, branchName, (err, commitHash) => {
         if (err)
             return callback(err);

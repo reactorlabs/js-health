@@ -56,6 +56,9 @@ module.exports = {
                     authorEmail : cout[i++],
                     message : "",
                 }
+		// initial commits have no parents, which the split reports as empty string in an array
+		if (c.parents[0] === "" && c.parents.length == 1)
+		    c.parents = [];
                 // message is variable length, terminated with ASCII(3)
                 while (cout[i].charCodeAt(0) !== 3) {
                     if (cout[i].charCodeAt(cout[i].length - 1) === 3) {
@@ -103,4 +106,12 @@ module.exports = {
             callback(err);
         })
     },
+
+    HashObject : (filename, callback) => {
+	child_process.exec("git hash-object " + filename, (err, cout, cerr) => {
+	    if (err)
+		return callback(err);
+	    return callback(null, cout.trim());
+	} )
+    }
 }

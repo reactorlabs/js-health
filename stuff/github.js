@@ -39,7 +39,7 @@ module.exports = {
             // first see if we should retry the request  && error.code == "ETIMEDOUT"
             if (err) {
                 if (retries > 0) 
-                    return module.exports.Request(url, onDone, json, retries - 1);
+                    return module.exports.Request(url, callback, json, retries - 1);
                 else
                     callback(err);
             }

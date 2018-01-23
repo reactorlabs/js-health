@@ -7,7 +7,8 @@ const async = require("async");
 const ghtorrent = require("./stuff/ghtorrent.js");
 const filter = require("./stuff/filter.js");
 const downloader = require("./stuff/downloader.js");
-
+const downloader_runner = require("./stuff/downloader_runner.js");
+const verifier = require("./stuff/verifier.js");
 
 
 function main() {
@@ -28,6 +29,12 @@ function main() {
         case "download":
             downloader.Download();
             return;
+        case "run_download":
+            downloader_runner.Run();
+    	    return;
+        case "verify":
+	    verifier.Verify();
+  	    return;
         default:
             console.log("Invalid action name " + action);
             console.log("see README.md");

@@ -102,7 +102,7 @@ class Project {
             if (err)
                 return callback(err);
 	    if (keepClones)
-		path = tmpDir + "/" + GetPath_(this.fullName).filename
+		path = tmpDir + "/" + Project.GetPath_(this.fullName).filename
             mkdirp(path, (err) => {
                 if (err)
                     return callback(err);

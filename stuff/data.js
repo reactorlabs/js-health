@@ -9,6 +9,7 @@ const github = require("./github.js");
 let outputDir = "output"; // output directory where the stored data reside
 let tmpDir = "tmp"; // temprary directory where the projects can be downloaded
 let clearTmpDir = false; // clear the temp directory contents before starting
+let keepClones = false; // should the cloned projects be kept, or deleted when the analysis finishes?
 
 class Project {
     constructor (fullName) {
@@ -69,7 +70,7 @@ class Project {
     }
 
     cleanup() {
-        if (this.localDirCleanup)
+	if (!keepClones && this.localDirCleanup)
             this.localDirCleanup();
     }
 
@@ -295,7 +296,10 @@ module.exports = {
                     tmpDir += "/";
             } else if (args[i] === "--clear-tmp-dir") {
                 clearTmpDir = true;
-            } else {
+		
+            } else if (args[i] === "--keep-clones") {
+		keepClones = true;
+	    } else {
 		++i;
                 continue;
             }

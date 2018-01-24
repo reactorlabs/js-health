@@ -70,7 +70,7 @@ class Project {
     }
 
     cleanup() {
-	if (!keepClones && this.localDirCleanup)
+	if (this.localDirCleanup)
             this.localDirCleanup();
     }
 
@@ -101,13 +101,16 @@ class Project {
         }, (err, path) => {
             if (err)
                 return callback(err);
+	    if (keepClones)
+		path = tmpDir + "/" + GetPath_(this.fullName).filename
             mkdirp(path, (err) => {
                 if (err)
                     return callback(err);
                 p.localDir = path;
-                p.localDirCleanup = () => {
-                    child_process.exec("rm -rf " + path, (err, cout, cerr) => {});
-                }
+		if (! keepClones)
+                    p.localDirCleanup = () => {
+                        child_process.exec("rm -rf " + path, (err, cout, cerr) => {});
+                    }
                 git.Clone(this,callback);
             });
         });

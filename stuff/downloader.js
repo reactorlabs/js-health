@@ -15,7 +15,7 @@ let skipExisting = false; // if true, projects already downloaded properly will 
 let stride = 1; // stride of analyzed projects for easy distribution and parallelism
 let first = 0; // first project to analyze
 let PQ_MAX = 100; // max number of preloaded project names
-let W_MAX = 0; // max projects that can wait for analysis simultaneously (or be downloaded at the same time)
+let W_MAX = 1; // max projects that can wait for analysis simultaneously (or be downloaded at the same time)
 let numWorkers = 1; // number of workers
 let langspec = null; // language specific settings
 
@@ -167,10 +167,10 @@ function DoDownload()  {
         // also ignore projects of different strides  
         if ((projectIndex_ - first) % stride !== 0)
             return;
-	// get the project name and see if the project is blacklisted
-	let pname = line.split(",")[0];
-	if (blacklistedProjects[pname])
-	    return;
+    	// get the project name and see if the project is blacklisted
+	    let pname = line.split(",")[0];
+	    if (blacklistedProjects[pname])
+	        return;
         // add the project to queue of projects to be fetched, pauses reading if too many projects are downloaded
         PQ.push(pname);
         if (PQ.length >= PQ_MAX)

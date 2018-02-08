@@ -43,6 +43,9 @@ let Su = 0; // unique snapshots;
 
 let projectIndex_ = 0; // index of currently read project from the input file
 
+let snapshots = {} // hashmap of seen snapshots so that we do not have to go to disk each time we see a snapshot we want to save
+let commits = {} // hashmap of seen commits so that we do not have to go to disk each time we see a snapshot we want to save
+
 module.exports = {
 
     /** Full fledged   */
@@ -219,6 +222,7 @@ function GetSetItems(set, start) {
 
 function Error(project, err, callback) {
     ++Pe;
+    console.log("! " + project.fullName + ": " + err);
     project.error(err, callback);
 }
 
@@ -270,17 +274,20 @@ function AnalyzeProject(project, callback) {
     let callback2 = (err) => {
         ++P;
         A.delete(project);
-        callback(err);
+        if (err)
+            Error(project, err, callback);
+        else 
+            callback(err);
     }
     // log that we have started analyzing the project
     console.log("+" + project.fullName);
     AnalyzeBranch(project, project.metadata.default_branch, (err) => {
         if (err)
-            return project.error(err, callback2);
+            return callback2(err);
         project.extras.time.analysis = new Date().getTime() / 1000 - project.extras.time.analysisStart;
         project.save((err) => {
             if (err)
-                return Error(project, err, callback2);
+                return callback2(err);;
             project.cleanup();
 	    // log that we have closed analysis of the project successfully
 	    console.log("-" + project.fullName);
@@ -318,6 +325,8 @@ function AnalyzeCommit(project, commit, callback) {
     ++C;
     ++project.extras.commits;
     //project.log("analyzing commit " + commit.hash);
+    if (commits[commit.hash] !== undefined)
+        return callback(null);
     commit.exists((does) => {
         if (does)
             return callback(null);
@@ -343,16 +352,19 @@ function AnalyzeCommit(project, commit, callback) {
                     ++St;
                     ++project.extras.trackedSnapshots;
                     if (ch.hash !== "0000000000000000000000000000000000000000") {
-                        return data.Snapshot.Exists(ch.hash, (does) => {
-                            if (does)
-                                return f(null);
-                            data.Snapshot.SaveAs(project, ch.hash, (err) => {
+                        if (snapshots[ch.hash] !== undefined)
+                            return f(null);
+                        //return data.Snapshot.Exists(ch.hash, (does) => {
+                        //    if (does)
+                        //        return f(null);
+                            return data.Snapshot.SaveAs(project, ch.hash, (err) => {
                                 if (err)
                                     return callback(err);
                                 ++Su;
+                                snapshots[ch.hash] = true;
                                 f(null);
                             });
-                        });
+                        //});
                     }
                 }
                 f(null);

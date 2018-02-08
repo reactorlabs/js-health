@@ -1,6 +1,7 @@
 const fs = require("fs");
 const child_process = require("child_process");
 const mkdirp = require("mkdirp");
+const tmp = require("tmp");
 
 module.exports = {
     Clone : (project, callback, retries = 10) => {
@@ -38,40 +39,52 @@ module.exports = {
     },
 
     GetCommits : (project, commitHash, callback) => {
-        child_process.exec('git rev-list --pretty=format:"%P%n%at%n%an%n%ae%n%B%x03" ' + commitHash, {
-            cwd : project.localDir,
-            maxBuffer : 40 * 1024 * 1024,
-        }, (err, cout, cerr) => {
+        tmp.tmpName((err, path) => {
             if (err)
                 return callback(err);
-            let commits = [];
-            cout = cout.trim().split("\n");
-            let i = 0;
-            while (i < cout.length) {
-                let c = {
-                    hash : cout[i++].substr(7), // commit HASH
-                    parents : cout[i++].split(" "), 
-                    date : parseInt(cout[i++]),
-                    author : cout[i++],
-                    authorEmail : cout[i++],
-                    message : "",
-                }
-		// initial commits have no parents, which the split reports as empty string in an array
-		if (c.parents[0] === "" && c.parents.length == 1)
-		    c.parents = [];
-                // message is variable length, terminated with ASCII(3)
-                while (cout[i].charCodeAt(0) !== 3) {
-                    if (cout[i].charCodeAt(cout[i].length - 1) === 3) {
-                        c.message += cout[i].substr(0,cout[i].length - 1);
-                        break;
-                    } else {
-                        c.message += cout[i++] + "\n";
-                    }
-                }
-                ++i;
-                commits.push(c);
-            }
-            callback(null, commits);
+            child_process.exec('git rev-list --pretty=format:"%P%n%at%n%an%n%ae%n%B%x03" ' + commitHash + " > " + path, {
+                cwd : project.localDir,
+                maxBuffer : 200 * 1024 * 1024,
+            }, (err, cout_, cerr) => {
+                if (err)
+                    return callback(err);
+                fs.readFile(path, "utf8", (err, cout) => {
+                    if (err)
+                        return callback(err);
+                    fs.unlink(path, (err) => {
+                        if (err)
+                            return callback(err);
+                        let commits = [];
+                        cout = cout.trim().split("\n");
+                        let i = 0;
+                        while (i < cout.length) {
+                            let c = {
+                                hash : cout[i++].substr(7), // commit HASH
+                                parents : cout[i++].split(" "), 
+                                date : parseInt(cout[i++]),
+                                author : cout[i++],
+                                authorEmail : cout[i++],
+                                message : "",
+                            }
+	    	                // initial commits have no parents, which the split reports as empty string in an array
+  		                    if (c.parents[0] === "" && c.parents.length == 1)
+		                    c.parents = [];
+                            // message is variable length, terminated with ASCII(3)
+                            while (cout[i].charCodeAt(0) !== 3) {
+                                if (cout[i].charCodeAt(cout[i].length - 1) === 3) {
+                                    c.message += cout[i].substr(0,cout[i].length - 1);
+                                    break;
+                                } else {
+                                    c.message += cout[i++] + "\n";
+                                }
+                            }
+                            ++i;
+                            commits.push(c);
+                        }
+                        callback(null, commits);
+                    })
+                });
+            })
         });
     },
 

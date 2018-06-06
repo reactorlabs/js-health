@@ -21,19 +21,12 @@ function mkdir(where, name, callback) {
 
 module.exports = {
 
-    help : function() {
-
-    },
-
-    download : function() {
-        let projectsFile = process.argv[3];
-        let outputDir = process.argv[4];
-        let apiTokens = process.argv[5];
-        let numApiWorkers = process.argv[6];
-        let numDownloadWorkers = 300;
-        let numProcessWorkers = 100;
-
-        let useGit = true;
+    download : function(settings) {
+        let projectsFile = settings.filteredProjects;
+        let outputDir = settings.outputDir;
+        let apiTokens = settings.apiTokens;
+        let numApiWorkers = settings.numApiWorkers;;
+        let numDownloadWorkers = settings.numDownloadWorkers;
 
         projectOutputDir = outputDir + "/projects";
         snapshotOutputDir = outputDir + "/files";
@@ -44,7 +37,6 @@ module.exports = {
 
         apiTokens_ = apiTokens;
         console.log("Loading Github API Tokens from " + apiTokens)
-        apiTokens_ = JSON.parse(fs.readFileSync(apiTokens));
         console.log("Initialized with " + apiTokens_.length + " Github API tokens...");
         console.log("Loading projects...");
         projects = []
@@ -62,30 +54,26 @@ module.exports = {
             Qapi = async.queue(ApiTask, numApiWorkers);
             console.log("Starting the download queue, workers: " + numDownloadWorkers);
             Qdownload = async.queue(DownloadTask, numDownloadWorkers);
-            console.log("Starting the process queue, workers: " + numProcessWorkers);
-            Qprocess = async.queue(ProcessTask, numProcessWorkers);
-            // queue the first project
-            if (useGit)
-                Qprocess.push({ kind: "clone", index: 0})
-            else
-                Qapi.push({ kind: "project", index: 0})
+//            console.log("Starting the process queue, workers: " + numProcessWorkers);
+//            Qprocess = async.queue(ProcessTask, numProcessWorkers);
+            Qapi.push({ kind: "project", index: 0})
             // when all the queues are drained, we can exit
             let canExit = () => {
                 if (Qapi.running() == 0 && Qapi.empty() &&
-                    Qdownload.running() == 0 && Qdownload.empty() &&
-                    Qprocess.running() == 0 && Qprocess.empty()) {
+                    Qdownload.running() == 0 && Qdownload.empty() 
+                    // && Qprocess.running() == 0 && Qprocess.empty()
+                    ) {
                     console.timeEnd("all");
                     console.log("KTHXBYE");
                     process.exit();
                 }
             }
 
-
             Qapi.drain = canExit;
             Qdownload.drain = canExit;
             setInterval(() => {
                 console.log("Qa: " + Qapi.running() + "/" + Qapi.length() + 
-                          ", Qp: " + Qprocess.running() + "/" + Qprocess.length() + 
+    //                      ", Qp: " + Qprocess.running() + "/" + Qprocess.length() + 
                           ", Qd: " + Qdownload.running() + "/" + Qdownload.length() + 
                            ", T: " + (++stats_time) + 
                            ", R: " + stats_requests + "(" + stats_retries + ")" + 
@@ -113,7 +101,7 @@ let Qapi = null;
 let Qdownload = null;
 
 /** Queue for spawning processes */
-let Qprocess = null;
+//let Qprocess = null;
 
 /** Trampoline that performs the appropriate task from the main queue.
  */
@@ -125,8 +113,6 @@ function ApiTask(task, callback) {
             return TaskBranch(task, callback);
         case "commit":
             return TaskCommit(task, callback);
-        case "clone":
-            return TaskClone(task, callback);
         default:
             console.log("Invalid api task " + task.kind);
             callback();
@@ -142,7 +128,7 @@ function DownloadTask(task, callback) {
             callback();
     }
 }
-
+/*
 function ProcessTask(task, callback) {
     switch (task.kind) {
         case "clone":
@@ -155,7 +141,7 @@ function ProcessTask(task, callback) {
             console.log("Invalid api task " + task.kind);
             callback();
     }
-}
+} */
 
 /** Returns true if the given filename should be recorded, false otherwise.
  */
@@ -413,7 +399,7 @@ function TaskProject(task, callback) {
             // mark the default branch for analysis
             AddProjectTask(Qapi, project, {
                 kind : "branch",
-                branch : i.default_branch,
+                branch : project.info.default_branch,
                 project : project
             });
         }
@@ -424,8 +410,32 @@ function TaskProject(task, callback) {
         Qapi.push({ kind: "project", index : task.index + 1});
 }
 
+/** When checking a branch, we always perform the check to see if the commit has changed.
+ */
+function TaskBranch(task, callback) {
+    let project = task.project
+    // if the project is not ok, ignore the task
+    if (! project.ok) {
+        callback();
+        return;
+    }
+    let url = project.url + "/branches/" + task.branch
+    APIRequest(url,
+        (error, response, result) => {
+            if (error) 
+                return AddProjectError(callback, project, "branch", task.branch, url, "Unable to obtain information for branch " + task.branch);
+            // enqueue the latest commit of the branch
+            AnalyzeBranch(Qapi, project, task.branch, result.commit.sha);
+            // we are done with the branch, close the task
+            EndProjectTask(project, callback);
+        }
+    );
+}
+
+
 /** Clones the project into a temp folder.
  */
+/*
 function TaskGitClone(task, callback) {
     InitializeProject(task.index, (project, analyze) => {
         if (analyze) {
@@ -459,30 +469,9 @@ function TaskGitClone(task, callback) {
     // add next project to the queue
     if (task.index < projects.length - 1)
         Qprocess.push({ kind: "clone", index : task.index + 1});
-}
+} */
 
-
-/** When checking a branch, we always perform the check to see if the commit has changed.
- */
-function TaskBranch(task, callback) {
-    let project = task.project
-    // if the project is not ok, ignore the task
-    if (! project.ok) {
-        callback();
-        return;
-    }
-    let url = project.url + "/branches/" + task.branch
-    APIRequest(url,
-        (error, response, result) => {
-            if (error) 
-                return AddProjectError(callback, project, "branch", task.branch, url, "Unable to obtain information for branch " + task.branch);
-            // enqueue the latest commit of the branch
-            AnalyzeBranch(Qapi, project, task.branch, result.commit.sha);
-            // we are done with the branch, close the task
-            EndProjectTask(project, callback);
-        }
-    );
-}
+/*
 
 function TaskGitBranch(task, callback) {
     let project = task.project;
@@ -500,7 +489,7 @@ function TaskGitBranch(task, callback) {
             EndProjectTask(project, callback);
         });
     });
-}
+} */
 
 function AnalyzeBranch(queue, project, branchName,  commitHash) {
     let branch = {
@@ -602,6 +591,7 @@ function TaskCommit(task, callback) {
     );
 }
 
+/*
 function TaskGitCommit(task, callback) {
     let project = task.project
     // no need to revisit the commit if we have already scanned it, or we are scanning it right now
@@ -696,7 +686,7 @@ function TaskGitCommit(task, callback) {
         }
     );
 
-}
+} */
 
 /** Obtain the snapshot of the file. */
 function TaskSnapshot(task, callback) {

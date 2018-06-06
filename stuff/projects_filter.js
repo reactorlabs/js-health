@@ -1,4 +1,5 @@
 const fs = require("fs")
+const fse = require("fs-extra")
 const csv_parser = require("csv-parse")
 
 let input = "";
@@ -19,20 +20,14 @@ var seenProjects = {};
 
 module.exports = {
 
-    help: function() {
-        // usage input file, output file, languages --noforks 
-    },
-
-    filter: function() {
+    filter: function(settings) {
         // get the arguments
-        input = process.argv[3];
-        output = process.argv[4];
-        for (let i = 5; i < process.argv.length; ++i) {
-            if (process.argv[i] == "--noforks")
-                forks = false;
-            else
-                languages[process.argv[i]] = process.argv[i];
-        }
+        input = settings.ghTorrentProjects
+        output = settings.filteredProjects
+        forks = ! settings.ignoreForks
+        fse.ensureFileSync(settings.filteredProjects);
+        languages[settings.language.name] = settings.language.name
+
         // create the parser, specify escape character so that it would correctly parse the projects...
         var parser = csv_parser({escape : '\\' })
 

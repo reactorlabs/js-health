@@ -28,7 +28,7 @@ module.exports = {
         for (let i = 5; i < process.argv.length; ++i) {
             if (process.argv[i] == "--no-forks") {
                 forks = false;
-            } if (process.argv[i].startsWith("--language=")) {
+            } else if (process.argv[i].startsWith("--language=")) {
                 let lang = process.argv[i].substr(11);
                 if (langspec !== null) {
                     console.log("Language can be specified only once");
